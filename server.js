@@ -203,6 +203,22 @@ app.get("/api/omi", requireLogin, async (req, res) => {
   }
 });
 
+// Proxy per i tile WMS catastali (Agenzia delle Entrate) — evita CORS dal browser
+app.get("/api/catasto-tile", requireLogin, async (req, res) => {
+  const bbox = req.query.bbox;
+  if (!bbox) return res.status(400).end();
+  const url = `https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=CP.CadastralParcel&STYLES=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX=${encodeURIComponent(bbox)}`;
+  try {
+    const r = await fetch(url);
+    const buf = await r.arrayBuffer();
+    res.set("Content-Type", "image/png");
+    res.set("Cache-Control", "public, max-age=86400");
+    res.send(Buffer.from(buf));
+  } catch(e) {
+    res.status(502).end();
+  }
+});
+
 // =================== FILE STATICI (l'app) ===================
 // L'app (index.html) viene servita da qui. È protetta: senza login l'API non risponde.
 app.use(express.static(path.join(__dirname, "public")));

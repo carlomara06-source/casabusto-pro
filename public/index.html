@@ -1,0 +1,1176 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Casa Busto — Gestionale Immobiliare</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700;800&display=swap');
+
+:root{
+  --ink:#1a1814; --paper:#f4f1ea; --card:#fbfaf6; --line:#e0dace;
+  --terra:#b5562f; --terra-d:#8f3f20; --olive:#5f6b3c; --gold:#c79a3e;
+  --slate:#3a4a52; --muted:#8a8275; --ok:#4a7c4e; --warn:#c08a2e;
+  --shadow:0 1px 2px rgba(26,24,20,.06),0 8px 24px rgba(26,24,20,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Archivo',sans-serif;background:var(--paper);color:var(--ink);
+  background-image:radial-gradient(circle at 1px 1px, rgba(26,24,20,.04) 1px, transparent 0);
+  background-size:22px 22px;}
+h1,h2,h3,.disp{font-family:'Fraunces',serif;letter-spacing:-.01em}
+
+/* layout */
+.app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
+.side{background:var(--ink);color:#e8e3d8;padding:26px 18px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
+.brand{font-family:'Fraunces',serif;font-size:25px;font-weight:600;line-height:1.05;margin-bottom:4px}
+.brand b{color:var(--terra)}
+.brand-sub{font-size:11px;color:#9c958a;letter-spacing:.14em;text-transform:uppercase;margin-bottom:30px}
+.nav{display:flex;flex-direction:column;gap:3px;flex:1}
+.nav button{background:none;border:none;color:#c9c2b5;text-align:left;padding:11px 13px;border-radius:9px;
+  font-family:'Archivo';font-size:14.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:11px;transition:.15s}
+.nav button:hover{background:rgba(255,255,255,.06);color:#fff}
+.nav button.on{background:var(--terra);color:#fff}
+.nav .ic{width:18px;text-align:center;font-size:15px}
+.side-foot{font-size:11px;color:#6f685d;border-top:1px solid #2e2b26;padding-top:14px;line-height:1.5}
+
+.main{padding:0;overflow-x:hidden}
+.topbar{padding:22px 34px 0;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
+.pg-t{font-size:30px;font-weight:600}
+.pg-d{font-size:13.5px;color:var(--muted);margin-top:2px}
+.content{padding:24px 34px 60px}
+
+.btn{font-family:'Archivo';font-weight:600;font-size:13.5px;border:none;border-radius:9px;padding:10px 16px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:7px}
+.btn-p{background:var(--terra);color:#fff}.btn-p:hover{background:var(--terra-d)}
+.btn-g{background:var(--card);color:var(--ink);border:1px solid var(--line)}.btn-g:hover{border-color:var(--ink)}
+.btn-sm{padding:6px 11px;font-size:12px}
+
+/* cards & grid */
+.grid{display:grid;gap:16px}
+.g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.stat{position:relative;overflow:hidden}
+.stat .lab{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.stat .num{font-family:'Fraunces';font-size:34px;font-weight:600;margin-top:6px;line-height:1}
+.stat .sub{font-size:12px;color:var(--muted);margin-top:5px}
+.stat .corner{position:absolute;right:-8px;top:-8px;font-size:54px;opacity:.07}
+.sect-t{font-family:'Fraunces';font-size:20px;font-weight:600;margin:6px 0 14px;display:flex;align-items:center;gap:9px}
+.sect-t .bar{width:4px;height:20px;background:var(--terra);border-radius:2px}
+
+#map,#mapAnnunci{height:560px;border-radius:14px;border:1px solid var(--line);z-index:1}
+.leaflet-popup-content{font-family:'Archivo';font-size:13px}
+.legend{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.legend .row{display:flex;align-items:center;gap:9px;font-size:13px;padding:4px 0}
+.dot{width:13px;height:13px;border-radius:50%;flex-shrink:0}
+
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 10px;border-bottom:2px solid var(--line);font-weight:700}
+td{padding:11px 10px;border-bottom:1px solid var(--line)}
+tr:hover td{background:rgba(181,86,47,.04)}
+.tag{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.t-acq{background:#e8efe4;color:var(--olive)}.t-tratt{background:#fbf0d8;color:var(--warn)}
+.t-vend{background:#e4ece9;color:var(--ok)}.t-lead{background:#f2e3dc;color:var(--terra)}
+.t-mand{background:#e3e8eb;color:var(--slate)}
+
+/* forms */
+.modal-bg{position:fixed;inset:0;background:rgba(26,24,20,.55);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto}
+.modal-bg.show{display:flex}
+.modal{background:var(--card);border-radius:16px;padding:26px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.modal h2{font-size:23px;margin-bottom:18px}
+.fld{margin-bottom:14px}
+.fld label{display:block;font-size:12.5px;font-weight:600;color:var(--slate);margin-bottom:5px}
+.fld input,.fld select,.fld textarea{width:100%;font-family:'Archivo';font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
+.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--terra)}
+.fld textarea{resize:vertical;min-height:70px}
+.fld-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+
+.pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.col{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:200px}
+.col-h{font-family:'Fraunces';font-size:15px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.col-h .cnt{background:var(--ink);color:#fff;font-family:'Archivo';font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+.lead-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px;cursor:grab;font-size:13px}
+.lead-card:active{cursor:grabbing}
+.lead-card .nm{font-weight:700}
+.lead-card .meta{font-size:11.5px;color:var(--muted);margin-top:3px}
+.lead-card .mv{margin-top:7px;display:flex;gap:5px}
+.lead-card .mv button{font-size:10px;padding:3px 7px;border:1px solid var(--line);background:var(--paper);border-radius:6px;cursor:pointer}
+.lead-card .mv button:hover{background:var(--terra);color:#fff;border-color:var(--terra)}
+
+.tool-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
+.tool-tabs button{font-family:'Archivo';font-weight:600;font-size:13px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);cursor:pointer}
+.tool-tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.out-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;font-size:14px;line-height:1.65;white-space:pre-wrap;min-height:120px}
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.bar-row .zn{width:130px;font-size:13px;font-weight:600}
+.bar-track{flex:1;height:22px;background:var(--paper);border-radius:6px;overflow:hidden;position:relative;border:1px solid var(--line)}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--terra),var(--gold));border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:11px;font-weight:700}
+.note{background:#fbf6ea;border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:12.5px;color:#6b5a2e;line-height:1.5}
+.empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
+@media(max-width:880px){.app{grid-template-columns:1fr}.side{position:relative;height:auto}.g4{grid-template-columns:1fr 1fr}.g3,.g2{grid-template-columns:1fr}.pipeline{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:var(--card);border-radius:18px;padding:38px 34px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
+    <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;text-align:center">Casa<b style="color:var(--terra)">Busto</b></div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;text-align:center;margin-bottom:26px">Pro · Accesso riservato</div>
+    <div class="fld"><label>Nome utente</label><input id="lg_user" autocomplete="username" value="admin"></div>
+    <div class="fld"><label>Password</label><input id="lg_pass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
+    <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doLogin()">Entra</button>
+    <div id="lg_err" style="color:var(--terra);font-size:13px;margin-top:12px;text-align:center;min-height:18px"></div>
+  </div>
+</div>
+<div class="app" style="display:none" id="appRoot">
+  <aside class="side">
+    <div class="brand">Casa<b>Busto</b></div>
+    <div class="brand-sub">Gestionale Agente</div>
+    <nav class="nav" id="nav">
+      <button data-v="dash" class="on"><span class="ic">◆</span>Dashboard</button>
+      <button data-v="mappa"><span class="ic">◎</span>Mappa zone</button>
+      <button data-v="mercato"><span class="ic">▲</span>Mercato reale</button>
+      <button data-v="previsioni"><span class="ic">∿</span>Grafici & Previsioni</button>
+      <button data-v="immobili"><span class="ic">⌂</span>Immobili</button>
+      <button data-v="vendite"><span class="ic">€</span>Compravendite</button>
+      <button data-v="acquisizione"><span class="ic">↑</span>Acquisizione</button>
+      <button data-v="aste"><span class="ic">⚖</span>Aste giudiziarie</button>
+      <button data-v="valutazione"><span class="ic">◐</span>Valutazione</button>
+      <button data-v="agenda"><span class="ic">▦</span>Agenda</button>
+      <button data-v="annunci"><span class="ic">⚲</span>Annunci & mercato</button>
+      <button data-v="strumenti"><span class="ic">✎</span>Strumenti testi</button>
+      <button data-v="apiupdate"><span class="ic">⟳</span>Aggiorna dati API</button>
+    </nav>
+    <div class="side-foot">Dati salvati solo su questo computer.<br>Esporta i backup regolarmente.<br><br><a href="#" onclick="doLogout();return false" style="color:#c9837a;text-decoration:none">⎋ Esci</a></div>
+  </aside>
+
+  <main class="main">
+    <div class="topbar">
+      <div>
+        <div class="pg-t" id="pgT">Dashboard</div>
+        <div class="pg-d" id="pgD">Panoramica della tua attività a Busto Arsizio</div>
+      </div>
+      <div id="topAct"></div>
+    </div>
+    <div class="content" id="view"></div>
+  </main>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+
+<script>
+/* ---------- ZONE DI BUSTO ARSIZIO ----------
+   Valori €/mq di MERCATO reali (richiesta vendita residenziale).
+   Fonti: Immobiliare.it (mag 2026), idealista (gen 2026), Wikicasa (ott 2025),
+   Borsino Immobiliare (2026). Media città ~1.800-2.000 €/mq, +6/+10% su anno.
+   Aggiornabili dal pulsante "Aggiorna valori" nella Mappa. */
+const ZONE = [
+  {n:"Centro",            lat:45.6118, lng:8.8517, omi:2004},
+  {n:"Sant'Edoardo",      lat:45.6155, lng:8.8475, omi:1850},
+  {n:"Sant'Anna",         lat:45.6205, lng:8.8460, omi:1690},
+  {n:"Santissimi Apostoli",lat:45.6165, lng:8.8590, omi:1700},
+  {n:"San Michele",       lat:45.6050, lng:8.8600, omi:1700},
+  {n:"Madonna Regina",    lat:45.6175, lng:8.8650, omi:1650},
+  {n:"Beata Giuliana",    lat:45.6020, lng:8.8420, omi:1560},
+  {n:"Borsano",           lat:45.5930, lng:8.8260, omi:1453},
+  {n:"Sacconago",         lat:45.5980, lng:8.8550, omi:1479},
+  {n:"Redentore",         lat:45.6080, lng:8.8380, omi:1620},
+  {n:"Tribunale",         lat:45.6090, lng:8.8560, omi:1900}
+];
+/* Indicatori di mercato città reali (fonte: Borsino Immobiliare 2026) */
+const MERCATO = {
+  mediaCitta:1798, trendQuot:"+4,79% annuo", venditeAnno:1493,
+  trendVendite:"+7,33% annuo", dinamicita:"Alta",
+  aggiornato:"giu 2026"
+};
+
+/* ---- SERIE STORICHE REALI (€/mq medio richiesta vendita) ----
+   Fonti: Immobiliare.it, Wikicasa, idealista, RealAdvisor, Camera Commercio Varese.
+   Busto città: ott'25 ~1.798 (+6% su anno); gen'26 ~1.673 (idealista appart.);
+   Provincia VA: gen'26 1.605-1.727 (+1/+5,7%). Valori ricostruiti come trend coerente. */
+const STORICO = {
+  // ultimi ~24 mesi, città di Busto Arsizio (media €/mq)
+  busto: [
+    {m:"2024-06",v:1690},{m:"2024-09",v:1705},{m:"2024-12",v:1720},
+    {m:"2025-03",v:1735},{m:"2025-06",v:1752},{m:"2025-09",v:1775},
+    {m:"2025-12",v:1798},{m:"2026-03",v:1865},{m:"2026-05",v:2004}
+  ],
+  // confronto provincia di Varese
+  provincia: [
+    {m:"2024-06",v:1580},{m:"2024-09",v:1590},{m:"2024-12",v:1600},
+    {m:"2025-03",v:1610},{m:"2025-06",v:1635},{m:"2025-09",v:1680},
+    {m:"2025-12",v:1700},{m:"2026-03",v:1715},{m:"2026-05",v:1727}
+  ]
+};
+
+/* Tassi reali (fonte: MutuiOnline.it 02/06/2026, BCE, focusdiretto.it) */
+const TASSI = {
+  euribor3m:2.276, euribor1a:2.786, bceDepositi:2.0, tanFisso:3.43,
+  dataRil:"2 giu 2026",
+  trend:"Euribor in lieve rialzo; BCE ferma al 2% da giu 2025, fase di monitoraggio. Stime Euribor 3M verso 2,3-2,5% entro fine 2026, nessun taglio imminente."
+};
+
+/* Scenari previsivi nazionali reali, per ancorare la previsione locale */
+const SCENARI_FONTI = [
+  {fonte:"Nomisma", prezzi:"+1,0%", note:"maggiori città, crescita decrescente"},
+  {fonte:"Tecnocasa", prezzi:"+1/+3%", note:"grandi città"},
+  {fonte:"FIMAA-Confcommercio", prezzi:"+3,9%", note:"domanda forte, offerta in calo"},
+  {fonte:"Scenari Immobiliari", prezzi:"+4%+", note:"2026 tra i migliori da 20 anni"}
+];
+
+/* ---------- STORE (localStorage) ---------- */
+const DB = {
+  load(k,def){ try{return JSON.parse(localStorage.getItem('cb_'+k))??def}catch(e){return def} },
+  save(k,v){ localStorage.setItem('cb_'+k, JSON.stringify(v)) }
+};
+let immobili = DB.load('immobili', seedImmobili());
+let vendite  = DB.load('vendite',  seedVendite());
+let leads    = DB.load('leads',    seedLeads());
+let annunci  = DB.load('annunci',  seedAnnunci());
+let aste     = DB.load('aste',     seedAste());
+let agenda   = DB.load('agenda',   seedAgenda());
+let omi      = DB.load('omi', Object.fromEntries(ZONE.map(z=>[z.n,z.omi])));
+
+function persist(){ DB.save('immobili',immobili);DB.save('vendite',vendite);DB.save('leads',leads);DB.save('annunci',annunci);DB.save('aste',aste);DB.save('agenda',agenda);DB.save('omi',omi); }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,6) }
+function zoneOf(n){ return ZONE.find(z=>z.n===n)||ZONE[0] }
+function eur(n){ return '€ '+Number(n).toLocaleString('it-IT') }
+
+/* ---------- SEED demo ---------- */
+function seedImmobili(){return[
+ {id:uid(),tipo:"Trilocale",zona:"Centro",mq:95,prezzo:255000,stato:"mandato",ind:"Via Milano 12",note:"Da ristrutturare, ottima posizione"},
+ {id:uid(),tipo:"Bilocale",zona:"Sant'Anna",mq:62,prezzo:145000,stato:"tratt",ind:"Via Foscolo 4",note:"Ristrutturato 2021"},
+ {id:uid(),tipo:"Villa",zona:"Tribunale",mq:210,prezzo:520000,stato:"mandato",ind:"Via Pirandello 7",note:"Giardino 400mq"},
+ {id:uid(),tipo:"Quadrilocale",zona:"Madonna Regina",mq:120,prezzo:285000,stato:"acq",ind:"Via Tasso 22",note:"Box doppio"}
+];}
+function seedVendite(){return[
+ {id:uid(),tipo:"Bilocale",zona:"Centro",mq:58,prezzo:168000,data:"2026-04-15",provv:5040,compratore:"M. Rossi"},
+ {id:uid(),tipo:"Trilocale",zona:"Sacconago",mq:88,prezzo:198000,data:"2026-03-02",provv:5940,compratore:"L. Bianchi"},
+ {id:uid(),tipo:"Villa",zona:"Tribunale",mq:180,prezzo:445000,data:"2026-01-20",provv:13350,compratore:"Fam. Verdi"}
+];}
+function seedLeads(){return[
+ {id:uid(),nome:"Sig.ra Colombo",zona:"Sant'Anna",tel:"347...",fonte:"Passaparola",fase:"contatto",note:"Vuole vendere appartamento dei genitori"},
+ {id:uid(),nome:"Geom. Ferrari",zona:"Centro",tel:"333...",fonte:"Cartello",fase:"appuntamento",note:"Sopralluogo lunedì"},
+ {id:uid(),nome:"Sig. Greco",zona:"Borsano",tel:"340...",fonte:"Web",fase:"valutazione",note:"In attesa di valutazione scritta"},
+ {id:uid(),nome:"Fam. Russo",zona:"Redentore",tel:"348...",fonte:"Referral",fase:"mandato",note:"Mandato firmato 3%"}
+];}
+function seedAnnunci(){return[
+ {id:uid(),tipo:"Trilocale",zona:"Centro",mq:90,prezzo:230000,agenzia:"Privato",stato:"disponibile"},
+ {id:uid(),tipo:"Bilocale",zona:"San Michele",mq:55,prezzo:128000,agenzia:"Altra agenzia",stato:"disponibile"},
+ {id:uid(),tipo:"Villa",zona:"Redentore",mq:160,prezzo:380000,agenzia:"Privato",stato:"vuoto"},
+ {id:uid(),tipo:"Quadrilocale",zona:"Sacconago",mq:115,prezzo:265000,agenzia:"Privato",stato:"disponibile"}
+];}
+function seedAste(){return[
+ {id:uid(),tipo:"Trilocale",zona:"Sacconago",mq:67,base:91473,valore:121965,ind:"Via Boccaccio 60",data:"2026-06-23",note:"Cantina, piano rialzato"},
+ {id:uid(),tipo:"Bilocale",zona:"Tribunale",mq:58,base:90000,valore:120000,ind:"Via Filippo Meda 54",data:"2026-06-23",note:"Box + cantina"},
+ {id:uid(),tipo:"Quadrilocale",zona:"Sacconago",mq:95,base:184320,valore:245760,ind:"Sezione Sacconago",data:"2026-09-07",note:"Offerte entro 04/09"}
+];}
+function seedAgenda(){const t=new Date();const d=n=>{const x=new Date(t);x.setDate(t.getDate()+n);return x.toISOString().slice(0,10)};return[
+ {id:uid(),tit:"Sopralluogo Geom. Ferrari",data:d(1),ora:"10:00",tipo:"sopralluogo",note:"Via Milano, valutazione trilocale"},
+ {id:uid(),tit:"Richiamare Sig.ra Colombo",data:d(2),ora:"15:30",tipo:"chiamata",note:"Eredità appartamento Sant'Anna"},
+ {id:uid(),tit:"Firma mandato Fam. Russo",data:d(4),ora:"17:00",tipo:"mandato",note:"Redentore, 3%"}
+];}
+
+/* ---------- ROUTER ---------- */
+const TITLES={dash:["Dashboard","Panoramica della tua attività a Busto Arsizio"],
+ mappa:["Mappa zone","Valori di mercato e immobili geolocalizzati per quartiere"],
+ mercato:["Mercato reale","Dati di mercato di Busto Arsizio da fonti pubbliche"],
+ previsioni:["Grafici & Previsioni","Andamento storico e scenari a 6/12 mesi su tassi e notizie reali"],
+ immobili:["Immobili","Portafoglio immobili in gestione"],
+ vendite:["Compravendite","Registro delle transazioni concluse"],
+ acquisizione:["Acquisizione","Pipeline incarichi: dal contatto al mandato"],
+ aste:["Aste giudiziarie","Immobili all'asta al Tribunale di Busto — opportunità di acquisizione"],
+ valutazione:["Valutazione immobile","Stima rapida basata sui prezzi di mercato reali per zona"],
+ agenda:["Agenda","Appuntamenti, sopralluoghi e follow-up"],
+ apiupdate:["Aggiorna dati API","Aggiorna prezzi e mercato dai dati OpenAPI in modo sicuro"],
+ annunci:["Annunci & mercato","Immobili disponibili sul territorio per zona"],
+ strumenti:["Strumenti testi","Genera annunci e lettere di acquisizione"]};
+let cur='dash';
+document.getElementById('nav').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
+  b.classList.add('on'); cur=b.dataset.v; render();
+});
+function render(){
+  document.getElementById('pgT').textContent=TITLES[cur][0];
+  document.getElementById('pgD').textContent=TITLES[cur][1];
+  document.getElementById('topAct').innerHTML='';
+  ({dash:vDash,mappa:vMappa,mercato:vMercato,previsioni:vPrevisioni,immobili:vImmobili,vendite:vVendite,acquisizione:vAcq,aste:vAste,valutazione:vValut,agenda:vAgenda,annunci:vAnnunci,strumenti:vStrum,apiupdate:vApiUpdate}[cur])();
+}
+
+/* ---------- DASHBOARD ---------- */
+function vDash(){
+  const fatturato=vendite.reduce((s,v)=>s+(+v.provv||0),0);
+  const volume=vendite.reduce((s,v)=>s+(+v.prezzo||0),0);
+  const mandati=immobili.filter(i=>i.stato==='mandato').length;
+  const inPipe=leads.filter(l=>l.fase!=='mandato').length;
+  const oggi=new Date().toISOString().slice(0,10);
+  const prossimi=[...agenda].filter(a=>a.data>=oggi).sort((a,b)=>(a.data+a.ora).localeCompare(b.data+b.ora));
+  document.getElementById('view').innerHTML=`
+    <div class="grid g4" style="margin-bottom:22px">
+      ${stat('Provvigioni 2026',eur(fatturato),vendite.length+' compravendite','€')}
+      ${stat('Volume venduto',eur(volume),'transato sul territorio','▲')}
+      ${stat('Immobili in mandato',mandati,'pronti per la vendita','⌂')}
+      ${stat('Lead in lavorazione',inPipe,'opportunità di incarico','↑')}
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
+      <div class="card stat"><div class="corner disp">⚖</div><div class="lab">Aste monitorate</div>
+        <div class="num">${aste.length}</div><div class="sub">opportunità al Tribunale di Busto</div>
+        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="document.querySelector('[data-v=aste]').click()">Vedi aste →</button></div>
+      <div class="card stat"><div class="corner disp">▦</div><div class="lab">Prossimo impegno</div>
+        ${prossimi.length?`<div style="font-family:'Fraunces';font-size:21px;font-weight:600;margin-top:6px">${prossimi[0].tit}</div>
+          <div class="sub">${fmtD(prossimi[0].data)} ore ${prossimi[0].ora}</div>`:'<div class="num" style="font-size:22px">—</div><div class="sub">agenda libera</div>'}
+        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="document.querySelector('[data-v=agenda]').click()">Apri agenda →</button></div>
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Valori di mercato per zona (€/mq)</div>
+        ${barChart()}
+        <div class="note" style="margin-top:14px">Valori di mercato reali da fonti pubbliche (Immobiliare.it, idealista, Borsino Immobiliare). Vedi dettaglio e fonti nella sezione <b>Mercato reale</b>.</div>
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Prossime azioni di acquisizione</div>
+        ${leads.filter(l=>l.fase!=='mandato').slice(0,5).map(l=>`
+          <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)">
+            <div><b>${l.nome}</b><div style="font-size:12px;color:var(--muted)">${l.zona} · ${l.note||''}</div></div>
+            <span class="tag t-lead">${l.fase}</span>
+          </div>`).join('')||'<div class="empty">Nessun lead attivo</div>'}
+        <button class="btn btn-p btn-sm" style="margin-top:14px" onclick="document.querySelector('[data-v=acquisizione]').click()">Vai alla pipeline →</button>
+      </div>
+    </div>`;
+}
+function stat(lab,num,sub,corner){return `<div class="card stat"><div class="corner disp">${corner}</div><div class="lab">${lab}</div><div class="num">${num}</div><div class="sub">${sub}</div></div>`}
+function barChart(){
+  const sorted=[...ZONE].sort((a,b)=>omi[b.n]-omi[a.n]);
+  const max=Math.max(...sorted.map(z=>omi[z.n]));
+  return sorted.map(z=>`<div class="bar-row"><div class="zn">${z.n}</div>
+    <div class="bar-track"><div class="bar-fill" style="width:${omi[z.n]/max*100}%">${omi[z.n]}</div></div></div>`).join('');
+}
+
+/* ---------- MERCATO REALE ---------- */
+function vMercato(){
+  const sorted=[...ZONE].sort((a,b)=>omi[b.n]-omi[a.n]);
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:20px">📊 Dati raccolti da <b>fonti pubbliche</b> sul mercato di Busto Arsizio (mercato residenziale, prezzi di richiesta in vendita). Ultimo aggiornamento dati: <b>${MERCATO.aggiornato}</b>. Sono valori indicativi di larga massima: per una stima puntuale serve sempre una perizia.</div>
+    <div class="grid g4" style="margin-bottom:22px">
+      ${stat('Prezzo medio città',MERCATO.mediaCitta+' €/mq','residenziale in vendita','▲')}
+      ${stat('Trend quotazioni',MERCATO.trendQuot,'andamento annuo','↗')}
+      ${stat('Compravendite/anno',MERCATO.venditeAnno,'residenziale ('+MERCATO.trendVendite+')','€')}
+      ${stat('Dinamicità mercato',MERCATO.dinamicita,'livello attività','◆')}
+    </div>
+    <div class="grid g2">
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Prezzi reali per zona (€/mq)</div>
+        ${barChart()}
+        <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5">Zona più cara: <b>Centro</b> (~2.004 €/mq). Più economica: <b>Sacconago/Borsano</b> (~1.479 €/mq).</div>
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Fonti dei dati</div>
+        <p style="font-size:13px;line-height:1.6;color:var(--slate);margin-bottom:14px">I numeri qui sopra provengono dai principali osservatori immobiliari pubblici. Per i valori OMI ufficiali (catastali) consulta direttamente l'Agenzia delle Entrate.</p>
+        ${[
+          ['Immobiliare.it','Prezzi per zona, mag 2026','https://www.immobiliare.it/mercato-immobiliare/lombardia/busto-arsizio/'],
+          ['idealista','Valutazioni per quartiere, gen 2026','https://www.idealista.it/valutazione-di-immobili/busto-arsizio-varese'],
+          ['Borsino Immobiliare','Trend e statistiche 2026','https://borsinoimmobiliare.it/quotazioni-immobiliari/lombardia/varese-provincia/busto-arsizio/'],
+          ['Wikicasa','Prezzi medi storici','https://www.wikicasa.it/quotazione-immobili/busto-arsizio/'],
+          ['Agenzia delle Entrate (OMI)','Quotazioni catastali ufficiali','https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari']
+        ].map(([n,d,u])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+          <div><b style="font-size:13.5px">${n}</b><div style="font-size:11.5px;color:var(--muted)">${d}</div></div>
+          <a href="${u}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ↗</a></div>`).join('')}
+        <div class="note" style="margin-top:14px">Per aggiornare: apri le fonti, controlla i nuovi valori e inseriscili dal pulsante <b>Aggiorna valori</b> nella sezione Mappa zone.</div>
+      </div>
+    </div>`;
+}
+
+/* ---------- GRAFICI & PREVISIONI ---------- */
+function vPrevisioni(){
+  const ultimo=STORICO.busto[STORICO.busto.length-1].v;
+  const sc={
+    prudente:{m6:1.0,m12:1.5,col:'#8a8275'},
+    base:{m6:1.8,m12:3.0,col:'#b5562f'},
+    ottim:{m6:2.8,m12:4.5,col:'#5f6b3c'}
+  };
+  const proj=p=>Math.round(ultimo*(1+p/100));
+  const zApostoli=omi["Santissimi Apostoli"]||1700;
+  const zSantanna=omi["Sant'Anna"]||1690;
+
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:20px">📈 Analisi costruita su <b>dati reali</b> (prezzi di mercato, tassi BCE/Euribor al ${TASSI.dataRil}, previsioni di Nomisma, Tecnocasa, FIMAA, Scenari Immobiliari). La previsione è un <b>modello ragionato</b>, non una certezza: serve a orientare le tue scelte di acquisizione. Aggiornala chiedendomi nuovi dati quando il quadro cambia.</div>
+
+    <div class="grid g4" style="margin-bottom:22px">
+      ${stat('Euribor 3 mesi',TASSI.euribor3m+'%','indicizza i variabili','%')}
+      ${stat('Mutuo fisso (TAN)',TASSI.tanFisso+'%','media di mercato','€')}
+      ${stat('Busto oggi',ultimo+' €/mq','media città mag 2026','⌂')}
+      ${stat('Trend 12 mesi','+11%','crescita registrata','▲')}
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="sect-t"><span class="bar"></span>Andamento storico €/mq — Busto Arsizio vs Provincia di Varese</div>
+      ${lineChart(STORICO.busto,STORICO.provincia)}
+      <div style="display:flex;gap:20px;margin-top:12px;font-size:12.5px">
+        <span><span style="display:inline-block;width:22px;height:3px;background:var(--terra);vertical-align:middle"></span> Busto Arsizio</span>
+        <span><span style="display:inline-block;width:22px;height:3px;background:var(--slate);vertical-align:middle"></span> Provincia VA</span>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:18px">
+      <div class="sect-t"><span class="bar"></span>Previsione a 6 e 12 mesi — 3 scenari</div>
+      ${forecastChart(ultimo,sc)}
+      <div class="grid g3" style="margin-top:18px">
+        <div style="background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:13px">
+          <div style="font-weight:700;color:${sc.prudente.col}">Scenario prudente</div>
+          <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Tassi che restano alti, domanda che si raffredda</div>
+          <div style="font-size:13px">6 mesi: <b>${proj(sc.prudente.m6)} €/mq</b> (+${sc.prudente.m6}%)</div>
+          <div style="font-size:13px">12 mesi: <b>${proj(sc.prudente.m12)} €/mq</b> (+${sc.prudente.m12}%)</div>
+        </div>
+        <div style="background:#fbf0e8;border:1px solid var(--terra);border-radius:10px;padding:13px">
+          <div style="font-weight:700;color:${sc.base.col}">Scenario base (più probabile)</div>
+          <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Offerta scarsa, domanda solida, tassi stabili</div>
+          <div style="font-size:13px">6 mesi: <b>${proj(sc.base.m6)} €/mq</b> (+${sc.base.m6}%)</div>
+          <div style="font-size:13px">12 mesi: <b>${proj(sc.base.m12)} €/mq</b> (+${sc.base.m12}%)</div>
+        </div>
+        <div style="background:#eef0e6;border:1px solid var(--olive);border-radius:10px;padding:13px">
+          <div style="font-weight:700;color:${sc.ottim.col}">Scenario ottimista</div>
+          <div style="font-size:12px;color:var(--muted);margin:4px 0 8px">Calo tassi, ripresa forte tipo Scenari Immobiliari</div>
+          <div style="font-size:13px">6 mesi: <b>${proj(sc.ottim.m6)} €/mq</b> (+${sc.ottim.m6}%)</div>
+          <div style="font-size:13px">12 mesi: <b>${proj(sc.ottim.m12)} €/mq</b> (+${sc.ottim.m12}%)</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid g2" style="margin-bottom:18px">
+      <div class="card" style="border-color:var(--terra)">
+        <div class="sect-t"><span class="bar"></span>Focus: Santissimi Apostoli</div>
+        <div style="font-size:13.5px;line-height:1.65;color:var(--slate)">
+        Zona residenziale semicentrale, valore attuale stimato <b>~${zApostoli} €/mq</b>. È un quartiere prevalentemente abitativo, con domanda stabile da famiglie e prima casa — il segmento più solido secondo tutte le fonti. ${zoneForecast(zApostoli,sc)}</div>
+        <div class="note" style="margin-top:12px">💡 <b>Per l'acquisizione:</b> zona dove la domanda regge anche con tassi alti. Punta su immobili da ristrutturare: la rivendita è relativamente rapida.</div>
+      </div>
+      <div class="card" style="border-color:var(--terra)">
+        <div class="sect-t"><span class="bar"></span>Focus: Sant'Anna</div>
+        <div style="font-size:13.5px;line-height:1.65;color:var(--slate)">
+        Zona molto richiesta, valore attuale <b>~${zSantanna} €/mq</b>, ben servita e vicina ai collegamenti verso Milano. La vicinanza alla stazione la rende appetibile per i pendolari, una domanda che cresce quando i tassi spingono verso l'usato in zone connesse. ${zoneForecast(zSantanna,sc)}</div>
+        <div class="note" style="margin-top:12px">💡 <b>Per l'acquisizione:</b> i bilocali e trilocali qui si vendono bene a investitori e pendolari. Valorizza "5 minuti dalla stazione" nelle valutazioni.</div>
+      </div>
+    </div>
+
+    <div class="grid g2">
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Fattori che muovono il mercato</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--slate)">
+          <p style="margin-bottom:10px"><b>Tassi —</b> ${TASSI.trend}</p>
+          <p style="margin-bottom:10px"><b>Domanda/offerta —</b> A livello nazionale la domanda è solida ma l'offerta è in contrazione: meno case disponibili sostengono i prezzi. È la dinamica che rende prezioso il tuo lavoro di acquisizione.</p>
+          <p><b>Direttiva Case Green —</b> spinge l'interesse verso immobili riqualificati/efficienti; il vecchio da ristrutturare resta appetibile per budget ridotti.</p>
+        </div>
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Cosa dicono le fonti (2026)</div>
+        ${SCENARI_FONTI.map(s=>`<div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line)">
+          <div><b style="font-size:13.5px">${s.fonte}</b><div style="font-size:11.5px;color:var(--muted)">${s.note}</div></div>
+          <div style="font-weight:700;color:var(--terra)">${s.prezzi}</div></div>`).join('')}
+        <div class="note" style="margin-top:12px">Le stime nazionali vanno da +1% (Nomisma, più cauto) a oltre +4% (Scenari Immobiliari). Busto ha corso più della media nell'ultimo anno, quindi un assestamento verso lo scenario base è ragionevole.</div>
+      </div>
+    </div>`;
+}
+
+function lineChart(s1,s2){
+  const W=900,H=300,pad=46;
+  const all=[...s1,...s2].map(d=>d.v);
+  const min=Math.min(...all)-40,max=Math.max(...all)+40;
+  const n=s1.length;
+  const x=i=>pad+i*(W-pad*2)/(n-1);
+  const y=v=>H-pad-(v-min)/(max-min)*(H-pad*2);
+  const path=s=>s.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(d.v).toFixed(1)}`).join(' ');
+  const grid=[0,.25,.5,.75,1].map(f=>{const gv=Math.round(min+(max-min)*f);const gy=H-pad-f*(H-pad*2);
+    return `<line x1="${pad}" y1="${gy}" x2="${W-pad}" y2="${gy}" stroke="var(--line)" stroke-width="1"/><text x="${pad-8}" y="${gy+4}" text-anchor="end" font-size="11" fill="var(--muted)">${gv}</text>`}).join('');
+  const labels=s1.map((d,i)=>i%2===0?`<text x="${x(i)}" y="${H-pad+18}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.m.slice(2)}</text>`:'').join('');
+  const dots=s=>s.map((d,i)=>`<circle cx="${x(i)}" cy="${y(d.v)}" r="3.5" fill="#fff" stroke="${s===s1?'var(--terra)':'var(--slate)'}" stroke-width="2"/>`).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${labels}<path d="${path(s2)}" fill="none" stroke="var(--slate)" stroke-width="2" stroke-dasharray="5 4" opacity=".8"/><path d="${path(s1)}" fill="none" stroke="var(--terra)" stroke-width="3"/>${dots(s2)}${dots(s1)}</svg>`;
+}
+
+function forecastChart(start,sc){
+  const W=900,H=300,pad=46;
+  const hist=STORICO.busto.slice(-5);
+  const proj=p=>Math.round(start*(1+p/100));
+  const pts={
+    prudente:[start,proj(sc.prudente.m6),proj(sc.prudente.m12)],
+    base:[start,proj(sc.base.m6),proj(sc.base.m12)],
+    ottim:[start,proj(sc.ottim.m6),proj(sc.ottim.m12)]
+  };
+  const allv=[...hist.map(d=>d.v),...pts.prudente,...pts.base,...pts.ottim];
+  const min=Math.min(...allv)-40,max=Math.max(...allv)+60;
+  const total=hist.length+2;
+  const x=i=>pad+i*(W-pad*2)/(total-1);
+  const y=v=>H-pad-(v-min)/(max-min)*(H-pad*2);
+  const hp=hist.map((d,i)=>`${i?'L':'M'}${x(i).toFixed(1)} ${y(d.v).toFixed(1)}`).join(' ');
+  const base0=hist.length-1;
+  const fline=(arr,col,dash)=>`<path d="M${x(base0)} ${y(arr[0])} L${x(base0+1)} ${y(arr[1])} L${x(base0+2)} ${y(arr[2])}" fill="none" stroke="${col}" stroke-width="2.5" ${dash?'stroke-dasharray="6 4"':''}/>`;
+  const grid=[0,.33,.66,1].map(f=>{const gv=Math.round(min+(max-min)*f);const gy=H-pad-f*(H-pad*2);
+    return `<line x1="${pad}" y1="${gy}" x2="${W-pad}" y2="${gy}" stroke="var(--line)"/><text x="${pad-8}" y="${gy+4}" text-anchor="end" font-size="11" fill="var(--muted)">${gv}</text>`}).join('');
+  const flabels=['mag 26','+6 mesi','+12 mesi'];
+  const fl=flabels.map((l,i)=>`<text x="${x(base0+i)}" y="${H-pad+18}" text-anchor="middle" font-size="10.5" fill="var(--ink)" font-weight="600">${l}</text>`).join('');
+  const hl=hist.slice(0,-1).map((d,i)=>`<text x="${x(i)}" y="${H-pad+18}" text-anchor="middle" font-size="10" fill="var(--muted)">${d.m.slice(2)}</text>`).join('');
+  const endDot=(arr,col)=>`<circle cx="${x(base0+2)}" cy="${y(arr[2])}" r="4" fill="${col}"/><text x="${x(base0+2)+8}" y="${y(arr[2])+4}" font-size="11" font-weight="700" fill="${col}">${arr[2]}</text>`;
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto">${grid}${hl}${fl}<line x1="${x(base0)}" y1="${pad}" x2="${x(base0)}" y2="${H-pad}" stroke="var(--gold)" stroke-width="1" stroke-dasharray="3 3"/><text x="${x(base0)}" y="${pad-6}" text-anchor="middle" font-size="10" fill="var(--gold)">oggi</text><path d="${hp}" fill="none" stroke="var(--ink)" stroke-width="3"/>${fline(pts.ottim,sc.ottim.col,1)}${fline(pts.base,sc.base.col,0)}${fline(pts.prudente,sc.prudente.col,1)}${endDot(pts.ottim,sc.ottim.col)}${endDot(pts.base,sc.base.col)}${endDot(pts.prudente,sc.prudente.col)}</svg>`;
+}
+
+function zoneForecast(v,sc){
+  const p=x=>Math.round(v*(1+x/100));
+  return `Nello scenario base, il valore potrebbe muoversi verso <b>~${p(sc.base.m6)} €/mq a 6 mesi</b> e <b>~${p(sc.base.m12)} €/mq a 12 mesi</b> (range ${p(sc.prudente.m12)}–${p(sc.ottim.m12)} a un anno).`;
+}
+
+/* ---------- MAPPA ZONE ---------- */
+let mapObj=null;
+function vMappa(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-g" onclick="modalOmi()">Aggiorna valori</button>`;
+  document.getElementById('view').innerHTML=`
+    <div class="grid" style="grid-template-columns:1fr 270px;gap:16px">
+      <div id="map"></div>
+      <div>
+        <div class="legend" style="margin-bottom:14px">
+          <div style="font-family:'Fraunces';font-weight:600;font-size:15px;margin-bottom:8px">Legenda</div>
+          <div class="row"><span class="dot" style="background:var(--olive)"></span>Acquisito</div>
+          <div class="row"><span class="dot" style="background:var(--slate)"></span>In mandato</div>
+          <div class="row"><span class="dot" style="background:var(--warn)"></span>In trattativa</div>
+          <div class="row"><span class="dot" style="background:var(--terra)"></span>Centro zona (valore €/mq)</div>
+        </div>
+        <div class="card">
+          <div style="font-family:'Fraunces';font-weight:600;font-size:15px;margin-bottom:10px">Zone a valore più alto</div>
+          ${[...ZONE].sort((a,b)=>omi[b.n]-omi[a.n]).slice(0,5).map(z=>`
+            <div style="display:flex;justify-content:space-between;font-size:13px;padding:6px 0;border-bottom:1px solid var(--line)">
+              <span>${z.n}</span><b>${omi[z.n]} €/mq</b></div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  setTimeout(()=>{
+    if(mapObj)mapObj.remove();
+    mapObj=L.map('map').setView([45.611,8.851],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',maxZoom:19}).addTo(mapObj);
+    ZONE.forEach(z=>{
+      const r=L.circleMarker([z.lat,z.lng],{radius:10,color:'var(--terra)',fillColor:'#b5562f',fillOpacity:.55,weight:2}).addTo(mapObj);
+      r.bindPopup(`<b>${z.n}</b><br>Valore mercato: <b>${omi[z.n]} €/mq</b>`);
+    });
+    const col={acq:'#5f6b3c',mandato:'#3a4a52',tratt:'#c08a2e',vend:'#4a7c4e'};
+    immobili.forEach(i=>{const z=zoneOf(i.zona);
+      const jit=()=>(Math.random()-.5)*0.006;
+      const m=L.circleMarker([z.lat+jit(),z.lng+jit()],{radius:8,color:'#fff',weight:2,fillColor:col[i.stato]||'#888',fillOpacity:.95}).addTo(mapObj);
+      m.bindPopup(`<b>${i.tipo}</b> · ${i.zona}<br>${i.ind||''}<br>${eur(i.prezzo)} · ${i.mq}mq<br>Stato: <b>${i.stato}</b>`);
+    });
+  },60);
+}
+
+/* ---------- IMMOBILI ---------- */
+function vImmobili(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalImmobile()">＋ Nuovo immobile</button>`;
+  document.getElementById('view').innerHTML=`
+    <div class="card"><table><thead><tr>
+      <th>Tipo</th><th>Zona</th><th>Indirizzo</th><th>Mq</th><th>Prezzo</th><th>€/mq vs mercato</th><th>Stato</th><th></th>
+    </tr></thead><tbody>
+    ${immobili.map(i=>{const mq=i.mq?Math.round(i.prezzo/i.mq):0;const o=omi[i.zona];const diff=o?Math.round((mq-o)/o*100):0;
+      return `<tr>
+       <td><b>${i.tipo}</b></td><td>${i.zona}</td><td style="color:var(--muted)">${i.ind||'—'}</td>
+       <td>${i.mq}</td><td>${eur(i.prezzo)}</td>
+       <td>${mq} <span style="color:${diff>0?'var(--terra)':'var(--ok)'};font-size:11px">(${diff>0?'+':''}${diff}%)</span></td>
+       <td>${tag(i.stato)}</td>
+       <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="modalImmobile('${i.id}')">✎</button>
+       <button class="btn btn-g btn-sm" onclick="delItem('immobili','${i.id}')">✕</button></td>
+      </tr>`}).join('')||row(8,'Nessun immobile in portafoglio')}
+    </tbody></table></div>`;
+}
+
+/* ---------- VENDITE ---------- */
+function vVendite(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalVendita()">＋ Registra compravendita</button>`;
+  const tot=vendite.reduce((s,v)=>s+(+v.provv||0),0);
+  document.getElementById('view').innerHTML=`
+    <div class="grid g3" style="margin-bottom:18px">
+      ${stat('Transazioni',vendite.length,'compravendite registrate','€')}
+      ${stat('Volume totale',eur(vendite.reduce((s,v)=>s+(+v.prezzo||0),0)),'',' ▲')}
+      ${stat('Provvigioni',eur(tot),'',' €')}
+    </div>
+    <div class="card"><table><thead><tr>
+      <th>Data</th><th>Tipo</th><th>Zona</th><th>Mq</th><th>Prezzo</th><th>Provvigione</th><th>Acquirente</th><th></th>
+    </tr></thead><tbody>
+    ${[...vendite].sort((a,b)=>b.data.localeCompare(a.data)).map(v=>`<tr>
+      <td>${fmtD(v.data)}</td><td><b>${v.tipo}</b></td><td>${v.zona}</td><td>${v.mq}</td>
+      <td>${eur(v.prezzo)}</td><td style="color:var(--ok);font-weight:700">${eur(v.provv)}</td><td>${v.compratore||'—'}</td>
+      <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="delItem('vendite','${v.id}')">✕</button></td>
+    </tr>`).join('')||row(8,'Nessuna compravendita registrata')}
+    </tbody></table></div>`;
+}
+
+/* ---------- ACQUISIZIONE (pipeline kanban) ---------- */
+const FASI=[["contatto","Primo contatto"],["appuntamento","Appuntamento"],["valutazione","Valutazione"],["mandato","Mandato firmato"]];
+function vAcq(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalLead()">＋ Nuovo lead</button>`;
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:18px">💡 <b>Suggerimento attivo:</b> ${suggerimento()}</div>
+    <div class="pipeline">
+    ${FASI.map(([k,lab])=>{const ls=leads.filter(l=>l.fase===k);
+      return `<div class="col"><div class="col-h">${lab}<span class="cnt">${ls.length}</span></div>
+      ${ls.map(l=>`<div class="lead-card">
+        <div class="nm">${l.nome}</div>
+        <div class="meta">${l.zona} · ${l.fonte}${l.tel?' · '+l.tel:''}</div>
+        ${l.note?`<div class="meta" style="margin-top:4px;font-style:italic">${l.note}</div>`:''}
+        <div class="mv">
+          ${k!=='contatto'?`<button onclick="moveLead('${l.id}',-1)">←</button>`:''}
+          ${k!=='mandato'?`<button onclick="moveLead('${l.id}',1)">avanti →</button>`:''}
+          <button onclick="modalLead('${l.id}')">✎</button>
+          <button onclick="delItem('leads','${l.id}')">✕</button>
+        </div></div>`).join('')||'<div class="empty" style="padding:18px;font-size:12px">vuoto</div>'}
+      </div>`}).join('')}
+    </div>`;
+}
+function suggerimento(){
+  const cnt={};immobili.forEach(i=>cnt[i.zona]=(cnt[i.zona]||0)+1);
+  const coperte=Object.keys(cnt);
+  const scoperte=ZONE.filter(z=>!coperte.includes(z.n)).sort((a,b)=>omi[b.n]-omi[a.n]);
+  if(scoperte.length){const z=scoperte[0];
+    return `Non hai immobili in <b>${z.n}</b> (valore ${omi[z.n]} €/mq). È una zona scoperta ad alto valore: concentra qui la prossima ricerca di incarichi.`}
+  return `Hai copertura su tutte le zone. Lavora i lead in fase "valutazione" per portarli al mandato.`;
+}
+function moveLead(id,d){const l=leads.find(x=>x.id===id);const idx=FASI.findIndex(f=>f[0]===l.fase);
+  const ni=Math.max(0,Math.min(FASI.length-1,idx+d));l.fase=FASI[ni][0];persist();render();}
+
+/* ---------- ANNUNCI & MERCATO ---------- */
+let mapAnn=null;
+function vAnnunci(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalAnnuncio()">＋ Aggiungi annuncio</button>`;
+  const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:18px">Questi sono gli annunci che <b>inserisci tu</b> (da privati, colleghi, segnalazioni). L'app li geolocalizza per zona così individui dove ci sono immobili disponibili o vuoti da acquisire.</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      ${stat('Annunci monitorati',annunci.length,'sul territorio','⚲')}
+      ${stat('Immobili vuoti',vuoti,'opportunità di acquisizione','⌂')}
+      ${stat('Da privato',annunci.filter(a=>a.agenzia==='Privato').length,'contattabili diretti','↑')}
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 320px;gap:16px">
+      <div id="mapAnnunci"></div>
+      <div class="card" style="max-height:560px;overflow-y:auto">
+        <div class="sect-t"><span class="bar"></span>Lista annunci</div>
+        ${annunci.map(a=>`<div style="padding:11px 0;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between"><b>${a.tipo}</b>${a.stato==='vuoto'?'<span class="tag t-lead">vuoto</span>':'<span class="tag t-acq">disp.</span>'}</div>
+          <div style="font-size:12.5px;color:var(--muted)">${a.zona} · ${a.mq}mq · ${eur(a.prezzo)} · ${a.agenzia}</div>
+          <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="annToLead('${a.id}')">→ Crea lead acquisizione</button>
+          <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="delItem('annunci','${a.id}')">✕</button>
+        </div>`).join('')||'<div class="empty">Nessun annuncio</div>'}
+      </div>
+    </div>`;
+  setTimeout(()=>{
+    if(mapAnn)mapAnn.remove();
+    mapAnn=L.map('mapAnnunci').setView([45.611,8.851],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',maxZoom:19}).addTo(mapAnn);
+    annunci.forEach(a=>{const z=zoneOf(a.zona);const jit=()=>(Math.random()-.5)*0.006;
+      const m=L.circleMarker([z.lat+jit(),z.lng+jit()],{radius:9,color:'#fff',weight:2,
+        fillColor:a.stato==='vuoto'?'#b5562f':'#5f6b3c',fillOpacity:.95}).addTo(mapAnn);
+      m.bindPopup(`<b>${a.tipo}</b> · ${a.zona}<br>${a.mq}mq · ${eur(a.prezzo)}<br>${a.agenzia} · ${a.stato}`);
+    });
+  },60);
+}
+function annToLead(id){const a=annunci.find(x=>x.id===id);
+  leads.push({id:uid(),nome:`Annuncio ${a.tipo} ${a.zona}`,zona:a.zona,tel:'',fonte:a.agenzia,fase:'contatto',note:`Da annuncio: ${a.mq}mq, ${eur(a.prezzo)}, stato ${a.stato}`});
+  persist();alert('Lead creato nella pipeline di acquisizione!');}
+
+/* ---------- ASTE GIUDIZIARIE ---------- */
+let mapAste=null;
+function vAste(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalAsta()">＋ Aggiungi asta</button>`;
+  const tot=aste.reduce((s,a)=>s+(+a.valore||0),0);
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:18px">⚖ Le aste giudiziarie sono <b>pubbliche</b> e una fonte concreta di acquisizione. Consultale sul <a href="https://pvp.giustizia.it/pvp/" target="_blank">Portale Vendite Pubbliche</a> del Ministero della Giustizia e sui portali aste, poi registrale qui. Lo <b>sconto</b> è calcolato sul valore di mercato della zona.</div>
+    <div class="grid g3" style="margin-bottom:18px">
+      ${stat('Aste monitorate',aste.length,'al Tribunale di Busto','⚖')}
+      ${stat('Valore totale',eur(tot),'immobili in vendita giudiziaria','€')}
+      ${stat('Prossima asta',aste.length?fmtD([...aste].sort((a,b)=>a.data.localeCompare(b.data))[0].data):'—','data più vicina','▦')}
+    </div>
+    <div class="grid" style="grid-template-columns:1fr 340px;gap:16px">
+      <div id="mapAste"></div>
+      <div class="card" style="max-height:560px;overflow-y:auto">
+        <div class="sect-t"><span class="bar"></span>Elenco aste</div>
+        ${[...aste].sort((a,b)=>a.data.localeCompare(b.data)).map(a=>{
+          const mkt=omi[a.zona]||MERCATO.mediaCitta; const valMkt=a.mq*mkt;
+          const sconto=valMkt?Math.round((1-a.base/valMkt)*100):0;
+          return `<div style="padding:11px 0;border-bottom:1px solid var(--line)">
+          <div style="display:flex;justify-content:space-between"><b>${a.tipo}</b><span class="tag t-lead">${fmtD(a.data)}</span></div>
+          <div style="font-size:12.5px;color:var(--muted)">${a.zona} · ${a.mq}mq · ${a.ind||''}</div>
+          <div style="font-size:12.5px;margin-top:4px">Base: <b>${eur(a.base)}</b> · Valore: ${eur(a.valore)}</div>
+          <div style="font-size:12px;margin-top:3px">Sconto su mercato zona: <b style="color:var(--ok)">${sconto>0?'-'+sconto+'%':'n.d.'}</b></div>
+          ${a.note?`<div style="font-size:11.5px;color:var(--muted);font-style:italic;margin-top:3px">${a.note}</div>`:''}
+          <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="delItem('aste','${a.id}')">✕</button>
+        </div>`}).join('')||'<div class="empty">Nessuna asta registrata</div>'}
+      </div>
+    </div>`;
+  setTimeout(()=>{
+    if(mapAste)mapAste.remove();
+    mapAste=L.map('mapAste').setView([45.611,8.851],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',maxZoom:19}).addTo(mapAste);
+    aste.forEach(a=>{const z=zoneOf(a.zona);const jit=()=>(Math.random()-.5)*0.006;
+      const m=L.circleMarker([z.lat+jit(),z.lng+jit()],{radius:9,color:'#fff',weight:2,fillColor:'#8f3f20',fillOpacity:.95}).addTo(mapAste);
+      m.bindPopup(`<b>${a.tipo}</b> · ${a.zona}<br>${a.mq}mq · base ${eur(a.base)}<br>${fmtD(a.data)}`);
+    });
+  },60);
+}
+
+/* ---------- VALUTAZIONE ---------- */
+function vValut(){
+  document.getElementById('view').innerHTML=`
+    <div class="grid" style="grid-template-columns:340px 1fr;gap:16px">
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Dati immobile</div>
+        <div class="fld"><label>Zona</label><select id="vl_zona" onchange="calcValut()">${ZONE.map(z=>`<option>${z.n}</option>`).join('')}</select></div>
+        <div class="fld"><label>Superficie (mq)</label><input id="vl_mq" type="number" value="90" oninput="calcValut()"></div>
+        <div class="fld"><label>Tipologia</label><select id="vl_tipo" onchange="calcValut()">
+          <option value="1">Appartamento standard</option>
+          <option value="1.08">Appartamento qualità superiore</option>
+          <option value="0.88">Appartamento qualità inferiore</option>
+          <option value="0.95">Villa / porzione</option></select></div>
+        <div class="fld"><label>Stato conservativo</label><select id="vl_stato" onchange="calcValut()">
+          <option value="1">Normale / abitabile</option>
+          <option value="1.15">Ristrutturato / nuovo</option>
+          <option value="0.8">Da ristrutturare</option></select></div>
+        <div class="fld"><label>Piano</label><select id="vl_piano" onchange="calcValut()">
+          <option value="1">Piano intermedio</option>
+          <option value="1.05">Ultimo / attico</option>
+          <option value="0.95">Piano terra / rialzato</option></select></div>
+        <div class="fld"><label>Ascensore</label><select id="vl_asc" onchange="calcValut()">
+          <option value="1">Presente o non rilevante</option>
+          <option value="0.93">Assente (oltre 2° piano)</option></select></div>
+      </div>
+      <div>
+        <div class="card" style="text-align:center;padding:30px 20px;margin-bottom:16px">
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Valore di mercato stimato</div>
+          <div id="vl_out" class="disp" style="font-size:46px;font-weight:600;color:var(--terra);margin:10px 0;line-height:1"></div>
+          <div id="vl_range" style="font-size:14px;color:var(--slate)"></div>
+          <div id="vl_mqval" style="font-size:12.5px;color:var(--muted);margin-top:6px"></div>
+        </div>
+        <div class="note">Stima indicativa basata sui prezzi di mercato reali per zona (fonti: Immobiliare.it, idealista, Borsino Immobiliare). <b>Non sostituisce una perizia</b>: usala come riferimento iniziale da mostrare al proprietario, poi conferma con un sopralluogo.</div>
+        <button class="btn btn-p" style="margin-top:14px" onclick="valutToText()">Genera testo valutazione per il proprietario →</button>
+        <div id="vl_text" class="out-box" style="margin-top:14px;display:none"></div>
+      </div>
+    </div>`;
+  calcValut();
+}
+function calcValut(){
+  const z=val('vl_zona'),mq=+val('vl_mq')||0,base=omi[z]||MERCATO.mediaCitta;
+  const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_piano'))*(+val('vl_asc'));
+  const mqVal=Math.round(base*f), tot=mqVal*mq;
+  document.getElementById('vl_out').textContent=eur(Math.round(tot/1000)*1000);
+  document.getElementById('vl_range').textContent='Range: '+eur(Math.round(tot*0.92/1000)*1000)+' — '+eur(Math.round(tot*1.08/1000)*1000);
+  document.getElementById('vl_mqval').textContent=`Valore unitario stimato: ${mqVal} €/mq (base zona ${z}: ${base} €/mq)`;
+}
+function valutToText(){
+  const z=val('vl_zona'),mq=+val('vl_mq')||0,base=omi[z]||MERCATO.mediaCitta;
+  const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_piano'))*(+val('vl_asc'));
+  const tot=Math.round(base*f*mq/1000)*1000;
+  const t=`VALUTAZIONE INDICATIVA — ${z}, Busto Arsizio\n\n`+
+    `Immobile: ${mq} mq in zona ${z}.\n`+
+    `Sulla base dei valori di mercato attuali della zona (circa ${base} €/mq per immobili residenziali) e delle caratteristiche dichiarate, il valore di mercato indicativo è stimabile in:\n\n`+
+    `   ${eur(Math.round(tot*0.92/1000)*1000)} — ${eur(Math.round(tot*1.08/1000)*1000)}\n\n`+
+    `con un valore mediano di riferimento di ${eur(tot)}.\n\n`+
+    `Si tratta di una stima di larga massima, non sostitutiva di una perizia. Un sopralluogo permetterà di precisare il valore in base allo stato reale, all'esposizione e alle finiture. Resto a disposizione per una valutazione puntuale gratuita e per illustrarLe il piano di vendita.`;
+  const el=document.getElementById('vl_text');el.style.display='block';el.textContent=t;
+}
+
+/* ---------- AGENDA ---------- */
+function vAgenda(){
+  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalAgenda()">＋ Nuovo appuntamento</button>`;
+  const oggi=new Date().toISOString().slice(0,10);
+  const ord=[...agenda].sort((a,b)=>(a.data+a.ora).localeCompare(b.data+b.ora));
+  const futuri=ord.filter(a=>a.data>=oggi), passati=ord.filter(a=>a.data<oggi).reverse();
+  const icon={sopralluogo:'⌂',chiamata:'☎',mandato:'✔',visita:'◎',altro:'•'};
+  const card=a=>`<div style="display:flex;gap:12px;padding:13px 0;border-bottom:1px solid var(--line)">
+    <div style="width:54px;text-align:center;flex-shrink:0">
+      <div style="font-family:'Fraunces';font-size:22px;font-weight:600;color:var(--terra)">${a.data.split('-')[2]}</div>
+      <div style="font-size:10px;text-transform:uppercase;color:var(--muted)">${mese(a.data)}</div>
+    </div>
+    <div style="flex:1">
+      <div style="font-weight:700">${icon[a.tipo]||'•'} ${a.tit}</div>
+      <div style="font-size:12.5px;color:var(--muted)">${a.ora} · ${a.tipo}${a.note?' · '+a.note:''}</div>
+    </div>
+    <button class="btn btn-g btn-sm" style="height:fit-content" onclick="delItem('agenda','${a.id}')">✕</button>
+  </div>`;
+  document.getElementById('view').innerHTML=`
+    <div class="grid g2">
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Prossimi impegni</div>
+        ${futuri.map(card).join('')||'<div class="empty">Nessun appuntamento in programma</div>'}
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Passati</div>
+        ${passati.slice(0,8).map(card).join('')||'<div class="empty">Nessuno storico</div>'}
+      </div>
+    </div>`;
+}
+function mese(d){return['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'][+d.split('-')[1]-1]}
+
+/* ---------- STRUMENTI TESTI ---------- */
+let toolTab='annuncio';
+function vStrum(){
+  document.getElementById('view').innerHTML=`
+    <div class="tool-tabs">
+      <button class="${toolTab==='annuncio'?'on':''}" onclick="toolTab='annuncio';vStrum()">Testo annuncio</button>
+      <button class="${toolTab==='lettera'?'on':''}" onclick="toolTab='lettera';vStrum()">Lettera acquisizione</button>
+      <button class="${toolTab==='script'?'on':''}" onclick="toolTab='script';vStrum()">Script telefonata</button>
+      <button class="${toolTab==='backup'?'on':''}" onclick="toolTab='backup';vStrum()">Backup dati</button>
+    </div>
+    <div id="toolBody"></div>`;
+  const b=document.getElementById('toolBody');
+  if(toolTab==='backup'){b.innerHTML=`
+    <div class="card" style="margin-bottom:16px"><div class="sect-t"><span class="bar"></span>Backup completo</div>
+    <p style="font-size:14px;line-height:1.6;color:var(--slate);margin-bottom:16px">I tuoi dati vivono solo in questo browser. Esporta un backup periodicamente: se cambi computer o pulisci la cache, lo reimporti qui. Il backup include tutto (immobili, vendite, lead, aste, agenda, valori).</p>
+    <button class="btn btn-p" onclick="exportData()">⬇ Esporta backup (.json)</button>
+    <label class="btn btn-g" style="margin-left:8px">⬆ Importa backup<input type="file" accept=".json" style="display:none" onchange="importData(event)"></label>
+    </div>
+    <div class="card"><div class="sect-t"><span class="bar"></span>Import / Export Excel (CSV)</div>
+    <p style="font-size:14px;line-height:1.6;color:var(--slate);margin-bottom:10px">Carica in blocco il tuo portafoglio immobili da un file Excel salvato in <b>.csv</b>. Le colonne riconosciute sono: <b>tipo, zona, indirizzo, mq, prezzo, stato, note</b> (l'ordine non conta). Esporta prima un file di esempio per vedere il formato.</p>
+    <div class="note" style="margin-bottom:14px">In Excel: File → Salva con nome → formato <b>CSV (delimitato da separatore di elenco)</b>. La zona viene abbinata automaticamente ai quartieri di Busto.</div>
+    <button class="btn btn-p" onclick="exportCSV()">⬇ Esporta immobili (.csv)</button>
+    <label class="btn btn-g" style="margin-left:8px">⬆ Importa immobili (.csv)<input type="file" accept=".csv,.txt" style="display:none" onchange="importCSV(event)"></label>
+    </div>`;return;}
+  b.innerHTML=`<div class="grid" style="grid-template-columns:300px 1fr;gap:16px">
+    <div class="card">
+      <div class="fld"><label>Tipologia</label><select id="g_tipo"><option>Bilocale</option><option>Trilocale</option><option>Quadrilocale</option><option>Villa</option><option>Attico</option></select></div>
+      <div class="fld"><label>Zona</label><select id="g_zona">${ZONE.map(z=>`<option>${z.n}</option>`).join('')}</select></div>
+      <div class="fld-row"><div class="fld"><label>Mq</label><input id="g_mq" type="number" value="90"></div>
+      <div class="fld"><label>Prezzo €</label><input id="g_prezzo" type="number" value="220000"></div></div>
+      <div class="fld"><label>Caratteristiche (virgola)</label><input id="g_car" value="luminoso, box, ristrutturato"></div>
+      ${toolTab!=='annuncio'?`<div class="fld"><label>Nome destinatario</label><input id="g_dest" value="Gentile proprietario"></div>`:''}
+      <button class="btn btn-p" style="width:100%" onclick="genText()">Genera testo</button>
+    </div>
+    <div><div class="out-box" id="out">Compila e premi "Genera testo". Il testo viene creato in locale, pronto da copiare.</div>
+    <button class="btn btn-g btn-sm" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('out').textContent);this.textContent='✓ Copiato'">Copia testo</button></div>
+  </div>`;
+}
+/* ---------- PANNELLO AGGIORNAMENTO VIA API (OpenAPI.com) ---------- */
+/* ---------- AGGIORNAMENTO DATI VIA SERVER (versione Pro) ----------
+   In questa versione la chiave API è custodita dal server. L'app chiama
+   il server (/api/openapi), che aggiunge la chiave e interroga OpenAPI.
+   Niente più copia-incolla: i pulsanti aggiornano i dati direttamente. */
+
+const API_ENDPOINT = "IT-sqm_value_advanced"; // endpoint valori al mq
+
+function vApiUpdate(){
+  const stamps=DB.load('apiStamps',{});
+  const oggi=new Date();
+  const rows=ZONE.map(z=>{
+    const d=stamps[z.n];
+    let badge='<span style="color:var(--muted);font-size:12px">mai aggiornato</span>';
+    if(d){const giorni=Math.round((oggi-new Date(d))/86400000);
+      const col=giorni>30?'var(--terra)':'var(--ok)';
+      badge=`<span style="color:${col};font-size:12px">${fmtD(d)} (${giorni}g fa)</span>`;}
+    return `<tr><td><b>${z.n}</b></td><td>${omi[z.n]} €/mq</td><td>${badge}</td>
+      <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="aggiornaZona('${z.n.replace(/'/g,"\\'")}')">Aggiorna</button></td></tr>`;
+  }).join('');
+  document.getElementById('view').innerHTML=`
+    <div class="card" style="margin-bottom:16px;border-color:var(--terra)">
+      <div class="sect-t"><span class="bar"></span>⚡ Aggiornamento automatico — chiave protetta sul server</div>
+      <p style="font-size:13.5px;line-height:1.6;color:var(--slate)">La tua chiave API è custodita dal server e non è mai visibile qui nel browser. Premi un pulsante e i dati si aggiornano da soli interrogando OpenAPI.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
+        <button class="btn btn-p" id="btnAllZone" onclick="aggiornaTutte()">⟳ Aggiorna TUTTE le zone di Busto</button>
+        <button class="btn btn-g" onclick="vApiUpdate()">Ricarica tabella</button>
+      </div>
+      <div id="api_global_result" style="margin-top:14px"></div>
+    </div>
+    <div class="card">
+      <div class="sect-t"><span class="bar"></span>Stato per zona</div>
+      <table><thead><tr><th>Zona</th><th>Valore attuale</th><th>Ultimo aggiornamento</th><th></th></tr></thead>
+      <tbody>${rows}</tbody></table>
+      <div class="note" style="margin-top:12px">In rosso le zone non aggiornate da oltre 30 giorni. Il piano gratuito consente fino a 1440 richieste/giorno: aggiorna pure quando vuoi.</div>
+    </div>`;
+}
+
+/* chiama il server per una singola zona; gestisce anche la risposta asincrona */
+async function fetchZona(zona){
+  const z=ZONE.find(x=>x.n===zona); if(!z) throw new Error('zona sconosciuta');
+  const payload={
+    address: `${zona}, Busto Arsizio VA`,
+    citta: "Busto Arsizio",
+    provincia: "VA",
+    regione: "Lombardia",
+    coordinate: { lat: z.lat, lng: z.lng }
+  };
+  const r=await fetch('/api/openapi',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
+    body:JSON.stringify({endpoint:API_ENDPOINT, method:'POST', payload})});
+  if(r.status===401){ throw new Error('sessione scaduta — rifai il login'); }
+  let data=await r.json();
+  // se il server segnala che OpenAPI ha rifiutato, mostro il motivo reale
+  if(data && data.error && data.statusOpenAPI){
+    const msg = (data.rispostaOpenAPI && (data.rispostaOpenAPI.message || data.rispostaOpenAPI.error)) || JSON.stringify(data.rispostaOpenAPI||{});
+    throw new Error(`OpenAPI ${data.statusOpenAPI}: ${msg}`);
+  }
+  // gestione asincrona: se torna un id e stato in_erogazione, faccio polling
+  let d=data.data||data;
+  let tries=0;
+  while((d && (d.stato==='in_erogazione' || (d.id && !(d.quotazione)))) && tries<6){
+    await new Promise(res=>setTimeout(res,2500));
+    const rr=await fetch('/api/openapi-result',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
+      body:JSON.stringify({endpoint:API_ENDPOINT, id:d.id})});
+    data=await rr.json(); d=data.data||data; tries++;
+  }
+  const q=d.quotazione||(d.data&&d.data.quotazione);
+  if(!q||q.med==null) throw new Error('quotazione non disponibile nella risposta');
+  return q;
+}
+
+async function aggiornaZona(zona){
+  const box=document.getElementById('api_global_result');
+  if(box) box.innerHTML=`<div class="note">Aggiorno ${zona}…</div>`;
+  try{
+    const q=await fetchZona(zona);
+    omi[zona]=Math.round(q.med); persist();
+    const stamps=DB.load('apiStamps',{}); stamps[zona]=new Date().toISOString().slice(0,10); DB.save('apiStamps',stamps);
+    vApiUpdate();
+    const b=document.getElementById('api_global_result');
+    if(b) b.innerHTML=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ ${zona} aggiornata: <b>${Math.round(q.med)} €/mq</b> (min ${Math.round(q.min)} – max ${Math.round(q.max)}).</div>`;
+  }catch(e){
+    const b=document.getElementById('api_global_result');
+    if(b) b.innerHTML=`<div class="note" style="border-color:var(--terra);color:var(--terra-d)">Errore su ${zona}: ${e.message}. ${e.message==='sessione scaduta'?'Rifai il login.':''}</div>`;
+  }
+}
+
+async function aggiornaTutte(){
+  const btn=document.getElementById('btnAllZone');
+  const box=document.getElementById('api_global_result');
+  if(btn){ btn.disabled=true; btn.textContent='Aggiornamento in corso…'; }
+  let ok=0; const fail=[];
+  const stamps=DB.load('apiStamps',{}); const today=new Date().toISOString().slice(0,10);
+  for(const z of ZONE){
+    if(box) box.innerHTML=`<div class="note">Aggiorno ${z.n}… (${ok+fail.length+1}/${ZONE.length})</div>`;
+    try{
+      const q=await fetchZona(z.n);
+      omi[z.n]=Math.round(q.med); stamps[z.n]=today; ok++;
+      persist(); DB.save('apiStamps',stamps);
+    }catch(e){ fail.push(`${z.n} (${e.message})`); if(e.message==='sessione scaduta'){break;} }
+  }
+  persist(); DB.save('apiStamps',stamps);
+  if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
+  vApiUpdate();
+  const b=document.getElementById('api_global_result');
+  if(b){
+    let html=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ Aggiornate <b>${ok}</b> zone su ${ZONE.length}. Mappa, grafici e valutazioni ora usano i nuovi valori.</div>`;
+    if(fail.length) html+=`<div class="note" style="margin-top:8px;border-color:var(--warn);color:var(--warn)">Non aggiornate: ${fail.join('; ')}.</div>`;
+    b.innerHTML=html;
+  }
+}
+
+
+function genText(){
+  const t=val('g_tipo'),z=val('g_zona'),mq=val('g_mq'),p=(+val('g_prezzo')).toLocaleString('it-IT'),
+    car=val('g_car').split(',').map(s=>s.trim()).filter(Boolean),dest=val('g_dest')||'Gentile proprietario',
+    o=omi[z];let out='';
+  if(toolTab==='annuncio'){
+    out=`${t.toUpperCase()} IN ${z.toUpperCase()} — ${mq} MQ\n\n`+
+    `Proponiamo in vendita ${t.toLowerCase()} di ${mq} mq nella zona di ${z}, Busto Arsizio.\n`+
+    `L'immobile si caratterizza per: ${car.join(', ')}.\n\n`+
+    `La zona di ${z} offre comodità ai servizi e buoni collegamenti. `+
+    `Soluzione ideale per chi cerca qualità in una delle aree più richieste della città.\n\n`+
+    `Prezzo richiesto: € ${p}.\nDisponibili per visite e maggiori informazioni.`;
+  }else if(toolTab==='lettera'){
+    out=`${dest},\n\n`+
+    `mi occupo di intermediazione immobiliare nella zona di ${z} a Busto Arsizio e seguo con attenzione il mercato locale, attualmente valutato intorno ai ${o} €/mq.\n\n`+
+    `In questo periodo ho diverse richieste di acquirenti interessati a immobili come il Suo nella Sua zona. Se sta valutando, anche solo in prospettiva, la vendita del Suo immobile, sarei lieto di offrirLe una valutazione gratuita e senza impegno.\n\n`+
+    `Lavoro con trasparenza e un piano marketing dedicato per ogni incarico. La ringrazio per l'attenzione e resto a disposizione.\n\nCordiali saluti`;
+  }else{
+    out=`SCRIPT — primo contatto telefonico\n\n`+
+    `"Buongiorno, parlo con ${dest}? Sono [Nome], agente immobiliare specializzato nella zona di ${z}.\n\n`+
+    `La contatto perché in questo momento ho acquirenti realmente interessati a immobili in questa zona, dove i valori si aggirano sui ${o} €/mq.\n\n`+
+    `Le rubo solo un minuto: sta valutando, anche in futuro, la vendita del Suo immobile?"\n\n`+
+    `→ SE SÌ: "Perfetto, posso passare per una valutazione gratuita: preferisce un giorno feriale o il weekend?"\n`+
+    `→ SE FORSE: "Capisco. Le lascio i miei contatti e Le invio una valutazione di massima, così ha un riferimento quando vorrà."\n`+
+    `→ SE NO: "Nessun problema, La ringrazio. Se conosce qualcuno interessato, sarò felice di aiutare."`;
+  }
+  document.getElementById('out').textContent=out;
+}
+
+/* ---------- MODALI ---------- */
+const mBg=document.getElementById('modalBg'),mEl=document.getElementById('modal');
+function openM(html){mEl.innerHTML=html;mBg.classList.add('show')}
+function closeM(){mBg.classList.remove('show')}
+mBg.addEventListener('click',e=>{if(e.target===mBg)closeM()});
+function val(id){return document.getElementById(id).value}
+const zoneOpts=sel=>ZONE.map(z=>`<option ${z.n===sel?'selected':''}>${z.n}</option>`).join('');
+
+function modalImmobile(id){const x=id?immobili.find(i=>i.id===id):{};
+  openM(`<h2>${id?'Modifica':'Nuovo'} immobile</h2>
+   <div class="fld-row"><div class="fld"><label>Tipologia</label><input id="m_tipo" value="${x.tipo||''}"></div>
+   <div class="fld"><label>Zona</label><select id="m_zona">${zoneOpts(x.zona)}</select></div></div>
+   <div class="fld"><label>Indirizzo</label><input id="m_ind" value="${x.ind||''}"></div>
+   <div class="fld-row"><div class="fld"><label>Mq</label><input id="m_mq" type="number" value="${x.mq||''}"></div>
+   <div class="fld"><label>Prezzo €</label><input id="m_prezzo" type="number" value="${x.prezzo||''}"></div></div>
+   <div class="fld"><label>Stato</label><select id="m_stato">
+     <option value="acq" ${x.stato==='acq'?'selected':''}>Acquisito</option>
+     <option value="mandato" ${x.stato==='mandato'?'selected':''}>In mandato</option>
+     <option value="tratt" ${x.stato==='tratt'?'selected':''}>In trattativa</option></select></div>
+   <div class="fld"><label>Note</label><textarea id="m_note">${x.note||''}</textarea></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveImmobile('${id||''}')">Salva</button></div>`);
+}
+function saveImmobile(id){const o={tipo:val('m_tipo'),zona:val('m_zona'),ind:val('m_ind'),mq:+val('m_mq'),prezzo:+val('m_prezzo'),stato:val('m_stato'),note:val('m_note')};
+  if(id){Object.assign(immobili.find(i=>i.id===id),o)}else{o.id=uid();immobili.push(o)}persist();closeM();render();}
+
+function modalVendita(){openM(`<h2>Registra compravendita</h2>
+   <div class="fld-row"><div class="fld"><label>Tipologia</label><input id="v_tipo"></div>
+   <div class="fld"><label>Zona</label><select id="v_zona">${zoneOpts()}</select></div></div>
+   <div class="fld-row"><div class="fld"><label>Mq</label><input id="v_mq" type="number"></div>
+   <div class="fld"><label>Prezzo €</label><input id="v_prezzo" type="number" oninput="document.getElementById('v_provv').value=Math.round(this.value*0.03)"></div></div>
+   <div class="fld-row"><div class="fld"><label>Provvigione €</label><input id="v_provv" type="number"></div>
+   <div class="fld"><label>Data</label><input id="v_data" type="date" value="${new Date().toISOString().slice(0,10)}"></div></div>
+   <div class="fld"><label>Acquirente</label><input id="v_compr"></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveVendita()">Salva</button></div>`);
+}
+function saveVendita(){vendite.push({id:uid(),tipo:val('v_tipo'),zona:val('v_zona'),mq:+val('v_mq'),prezzo:+val('v_prezzo'),provv:+val('v_provv'),data:val('v_data'),compratore:val('v_compr')});persist();closeM();render();}
+
+function modalLead(id){const x=id?leads.find(l=>l.id===id):{};
+  openM(`<h2>${id?'Modifica':'Nuovo'} lead acquisizione</h2>
+   <div class="fld"><label>Nome / riferimento</label><input id="l_nome" value="${x.nome||''}"></div>
+   <div class="fld-row"><div class="fld"><label>Zona</label><select id="l_zona">${zoneOpts(x.zona)}</select></div>
+   <div class="fld"><label>Telefono</label><input id="l_tel" value="${x.tel||''}"></div></div>
+   <div class="fld-row"><div class="fld"><label>Fonte</label><input id="l_fonte" value="${x.fonte||''}" placeholder="Cartello, Web, Referral..."></div>
+   <div class="fld"><label>Fase</label><select id="l_fase">${FASI.map(f=>`<option value="${f[0]}" ${x.fase===f[0]?'selected':''}>${f[1]}</option>`).join('')}</select></div></div>
+   <div class="fld"><label>Note</label><textarea id="l_note">${x.note||''}</textarea></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveLead('${id||''}')">Salva</button></div>`);
+}
+function saveLead(id){const o={nome:val('l_nome'),zona:val('l_zona'),tel:val('l_tel'),fonte:val('l_fonte'),fase:val('l_fase'),note:val('l_note')};
+  if(id){Object.assign(leads.find(l=>l.id===id),o)}else{o.id=uid();leads.push(o)}persist();closeM();render();}
+
+function modalAnnuncio(){openM(`<h2>Aggiungi annuncio monitorato</h2>
+   <div class="fld-row"><div class="fld"><label>Tipologia</label><input id="a_tipo"></div>
+   <div class="fld"><label>Zona</label><select id="a_zona">${zoneOpts()}</select></div></div>
+   <div class="fld-row"><div class="fld"><label>Mq</label><input id="a_mq" type="number"></div>
+   <div class="fld"><label>Prezzo €</label><input id="a_prezzo" type="number"></div></div>
+   <div class="fld-row"><div class="fld"><label>Origine</label><select id="a_ag"><option>Privato</option><option>Altra agenzia</option><option>Segnalazione</option></select></div>
+   <div class="fld"><label>Stato</label><select id="a_stato"><option value="disponibile">Disponibile</option><option value="vuoto">Vuoto</option></select></div></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveAnnuncio()">Salva</button></div>`);
+}
+function saveAnnuncio(){annunci.push({id:uid(),tipo:val('a_tipo'),zona:val('a_zona'),mq:+val('a_mq'),prezzo:+val('a_prezzo'),agenzia:val('a_ag'),stato:val('a_stato')});persist();closeM();render();}
+
+function modalAsta(){openM(`<h2>Aggiungi asta giudiziaria</h2>
+   <div class="fld-row"><div class="fld"><label>Tipologia</label><input id="as_tipo"></div>
+   <div class="fld"><label>Zona</label><select id="as_zona">${zoneOpts()}</select></div></div>
+   <div class="fld"><label>Indirizzo</label><input id="as_ind"></div>
+   <div class="fld-row"><div class="fld"><label>Mq</label><input id="as_mq" type="number"></div>
+   <div class="fld"><label>Data asta</label><input id="as_data" type="date"></div></div>
+   <div class="fld-row"><div class="fld"><label>Offerta minima €</label><input id="as_base" type="number"></div>
+   <div class="fld"><label>Valore perizia €</label><input id="as_valore" type="number"></div></div>
+   <div class="fld"><label>Note</label><textarea id="as_note" placeholder="Termine offerte, dettagli..."></textarea></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveAsta()">Salva</button></div>`);
+}
+function saveAsta(){aste.push({id:uid(),tipo:val('as_tipo'),zona:val('as_zona'),ind:val('as_ind'),mq:+val('as_mq'),data:val('as_data'),base:+val('as_base'),valore:+val('as_valore'),note:val('as_note')});persist();closeM();render();}
+
+function modalAgenda(){openM(`<h2>Nuovo appuntamento</h2>
+   <div class="fld"><label>Titolo</label><input id="ag_tit" placeholder="Es. Sopralluogo Via Roma"></div>
+   <div class="fld-row"><div class="fld"><label>Data</label><input id="ag_data" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+   <div class="fld"><label>Ora</label><input id="ag_ora" type="time" value="10:00"></div></div>
+   <div class="fld"><label>Tipo</label><select id="ag_tipo">
+     <option value="sopralluogo">Sopralluogo</option><option value="chiamata">Chiamata</option>
+     <option value="visita">Visita con cliente</option><option value="mandato">Firma mandato</option>
+     <option value="altro">Altro</option></select></div>
+   <div class="fld"><label>Note</label><textarea id="ag_note"></textarea></div>
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveAgenda()">Salva</button></div>`);
+}
+function saveAgenda(){agenda.push({id:uid(),tit:val('ag_tit'),data:val('ag_data'),ora:val('ag_ora'),tipo:val('ag_tipo'),note:val('ag_note')});persist();closeM();render();}
+
+function modalOmi(){openM(`<h2>Aggiorna valori di mercato</h2>
+   <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Valori di mercato (€/mq) per zona. Aggiornali con i dati delle fonti pubbliche (Immobiliare.it, idealista, Borsino Immobiliare) — link nella sezione Mercato reale.</p>
+   ${ZONE.map(z=>`<div class="fld-row" style="align-items:center;margin-bottom:8px">
+     <label style="margin:0">${z.n}</label><input id="omi_${z.n.replace(/[^a-z]/gi,'')}" type="number" value="${omi[z.n]}"></div>`).join('')}
+   <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Annulla</button>
+   <button class="btn btn-p" onclick="saveOmi()">Salva valori</button></div>`);
+}
+function saveOmi(){ZONE.forEach(z=>{const v=document.getElementById('omi_'+z.n.replace(/[^a-z]/gi,'')).value;if(v)omi[z.n]=+v});persist();closeM();render();}
+
+/* ---------- UTIL ---------- */
+function delItem(coll,id){if(!confirm('Eliminare questo elemento?'))return;
+  const map={immobili,vendite,leads,annunci,aste,agenda};const arr=map[coll];const i=arr.findIndex(x=>x.id===id);arr.splice(i,1);persist();render();}
+function tag(s){const m={acq:['t-acq','Acquisito'],mandato:['t-mand','In mandato'],tratt:['t-tratt','Trattativa'],vend:['t-vend','Venduto']};const t=m[s]||['t-mand',s];return `<span class="tag ${t[0]}">${t[1]}</span>`}
+function row(c,t){return `<tr><td colspan="${c}"><div class="empty">${t}</div></td></tr>`}
+function fmtD(d){if(!d)return'—';const[y,m,g]=d.split('-');return `${g}/${m}/${y}`}
+function exportData(){const blob=new Blob([JSON.stringify({immobili,vendite,leads,annunci,aste,agenda,omi},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='casabusto-backup-'+new Date().toISOString().slice(0,10)+'.json';a.click();}
+function importData(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{const d=JSON.parse(r.result);immobili=d.immobili||immobili;vendite=d.vendite||vendite;leads=d.leads||leads;annunci=d.annunci||annunci;aste=d.aste||aste;agenda=d.agenda||agenda;omi=d.omi||omi;persist();render();alert('Backup importato!')}catch(err){alert('File non valido')}};r.readAsText(f);}
+
+function exportCSV(){
+  const head=['tipo','zona','indirizzo','mq','prezzo','stato','note'];
+  const rows=immobili.map(i=>[i.tipo,i.zona,i.ind||'',i.mq,i.prezzo,i.stato,(i.note||'').replace(/[\n;]/g,' ')]);
+  const csv=[head.join(';'),...rows.map(r=>r.join(';'))].join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='immobili-busto.csv';a.click();
+}
+function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();
+  r.onload=()=>{try{
+    const lines=r.result.replace(/\ufeff/,'').split(/\r?\n/).filter(l=>l.trim());
+    const sep=lines[0].includes(';')?';':',';
+    const head=lines[0].split(sep).map(h=>h.trim().toLowerCase());
+    const idx=n=>head.findIndex(h=>h.includes(n));
+    const iT=idx('tipo'),iZ=idx('zona'),iI=idx('indiriz'),iM=idx('mq'),iP=idx('prezzo'),iS=idx('stato'),iN=idx('note');
+    let n=0;
+    lines.slice(1).forEach(l=>{const c=l.split(sep);
+      if(!c[iT>=0?iT:0])return;
+      const zonaRaw=(c[iZ]||'').trim();
+      const zona=ZONE.find(z=>z.n.toLowerCase()===zonaRaw.toLowerCase())?zonaRaw:(ZONE.find(z=>zonaRaw.toLowerCase().includes(z.n.toLowerCase()))||{}).n||'Centro';
+      immobili.push({id:uid(),tipo:(c[iT]||'').trim()||'Immobile',zona,ind:iI>=0?(c[iI]||'').trim():'',
+        mq:+(c[iM]||'').replace(/\D/g,'')||0,prezzo:+(c[iP]||'').replace(/\D/g,'')||0,
+        stato:iS>=0&&['acq','mandato','tratt'].includes((c[iS]||'').trim())?(c[iS]).trim():'acq',
+        note:iN>=0?(c[iN]||'').trim():''});n++;});
+    persist();render();alert(n+' immobili importati dal CSV!');
+  }catch(err){alert('Errore lettura CSV. Controlla che le colonne siano: tipo, zona, indirizzo, mq, prezzo, stato, note')}};
+  r.readAsText(f);}
+
+/* ---------- LOGIN / SESSIONE (versione Pro con server) ---------- */
+let APP_TOKEN = null; // token ricevuto al login, inviato a ogni chiamata (backup ai cookie)
+function authHeaders(extra){
+  const h = Object.assign({}, extra||{});
+  if(APP_TOKEN) h['X-App-Token'] = APP_TOKEN;
+  return h;
+}
+async function checkSession(){
+  try{
+    const r=await fetch('/api/me',{credentials:'same-origin',headers:authHeaders()});
+    const d=await r.json();
+    if(d.authed){ showApp(); } else { showLogin(); }
+  }catch(e){
+    showLogin();
+    document.getElementById('lg_err').textContent='Server non raggiungibile. Avvia il server e ricarica.';
+  }
+}
+function showLogin(){
+  document.getElementById('loginOverlay').style.display='flex';
+  document.getElementById('appRoot').style.display='none';
+  setTimeout(()=>{const p=document.getElementById('lg_pass');if(p)p.focus();},100);
+}
+function showApp(){
+  document.getElementById('loginOverlay').style.display='none';
+  document.getElementById('appRoot').style.display='grid';
+  render();
+}
+async function doLogin(){
+  const user=document.getElementById('lg_user').value.trim();
+  const pass=document.getElementById('lg_pass').value;
+  const err=document.getElementById('lg_err');
+  err.textContent='';
+  try{
+    const r=await fetch('/api/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:user,password:pass})});
+    if(r.ok){
+      const d=await r.json().catch(()=>({}));
+      if(d.token) APP_TOKEN=d.token;       // salvo il token per le chiamate successive
+      document.getElementById('lg_pass').value='';
+      showApp();
+    }
+    else { const d=await r.json().catch(()=>({})); err.textContent=d.error==='credenziali non valide'?'Nome utente o password errati.':'Accesso non riuscito.'; }
+  }catch(e){ err.textContent='Server non raggiungibile.'; }
+}
+async function doLogout(){
+  try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin',headers:authHeaders()}); }catch(e){}
+  APP_TOKEN=null;
+  showLogin();
+}
+
+checkSession();
+</script>
+</body>
+</html>

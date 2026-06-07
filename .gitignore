@@ -1,0 +1,5 @@
+# NON caricare mai questi file online: contengono i tuoi segreti
+.env
+node_modules/
+*.log
+.DS_Store

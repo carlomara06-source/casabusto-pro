@@ -1,0 +1,20 @@
+{
+  "name": "casabusto-pro",
+  "version": "1.0.0",
+  "description": "Server sicuro per Casa Busto - custodisce la chiave API OpenAPI e gestisce login",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "hash": "node genera-password.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

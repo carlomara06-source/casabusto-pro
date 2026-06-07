@@ -1587,16 +1587,25 @@ function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
 /* ================================================================
    MAPPA 3D — MapLibre GL JS + OpenFreeMap + Catasto WMS + Immobili
    ================================================================ */
-let map3dObj=null, map3dReady=false;
+let map3dObj=null, map3dReady=false, map2dFallback=null;
+
+/* Controlla se WebGL è disponibile nel browser corrente */
+function checkWebGL(){
+  try{
+    const c=document.createElement('canvas');
+    return !!(c.getContext('webgl2')||c.getContext('webgl')||c.getContext('experimental-webgl'));
+  }catch(e){return false;}
+}
+
 function vMappa3D(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:8px;padding:5px 11px;backdrop-filter:blur(6px)">
         <input type="checkbox" id="togCatasto" onchange="toggleCatastoLayer(this.checked)"> Catasto
       </label>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:58,bearing:-18,zoom:15.5,duration:900})">🏙 3D zoom</button>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:0,bearing:0,zoom:13.5,duration:800})">🗺 Piano</button>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.flyTo({center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,duration:1400})">⌂ Centro</button>
+      <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.easeTo({pitch:58,bearing:-18,zoom:15.5,duration:900});else if(map2dFallback)map2dFallback.setZoom(16)">🏙 Zoom+</button>
+      <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.easeTo({pitch:0,bearing:0,zoom:13.5,duration:800});else if(map2dFallback)map2dFallback.setZoom(13)">🗺 Piano</button>
+      <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.flyTo({center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,duration:1400});else if(map2dFallback)map2dFallback.setView([45.611,8.851],14)">⌂ Centro</button>
     </div>`;
   // Inietta CSS spinner una sola volta
   if(!document.getElementById('_m3dCss')){
@@ -1647,24 +1656,44 @@ function _init3D(){
   const container=document.getElementById('map3d');
   if(!container)return;
 
-  // Se la mappa esiste già, prova a riutilizzarla
+  // --- Riutilizza mappa 3D già inizializzata ---
   if(map3dObj){
     try{
       const canvas=map3dObj.getCanvas();
-      if(canvas && document.body.contains(canvas)){
-        // Canvas ancora nel DOM → resize e nascondi spinner
+      if(canvas&&document.body.contains(canvas)){
         map3dObj.resize();
         const ldr=document.getElementById('map3dLoading');
         if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
         return;
       }
     }catch(e){}
-    // Canvas staccato → rimuovi e ricrea
     try{map3dObj.remove();}catch(e){}
     map3dObj=null;map3dReady=false;
   }
 
-  // Crea la mappa (requestAnimationFrame garantisce che il DOM sia pronto)
+  // --- Riutilizza mappa 2D Leaflet già inizializzata ---
+  if(map2dFallback){
+    try{
+      const c=map2dFallback.getContainer();
+      if(c&&document.body.contains(c)){
+        map2dFallback.invalidateSize();
+        const ldr=document.getElementById('map3dLoading');
+        if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+        return;
+      }
+    }catch(e){}
+    try{map2dFallback.remove();}catch(e){}
+    map2dFallback=null;
+  }
+
+  // --- Controlla WebGL PRIMA di inizializzare MapLibre ---
+  if(!checkWebGL()){
+    console.warn('[3D] WebGL non disponibile → fallback Leaflet 2D');
+    _initLeaflet2D(container);
+    return;
+  }
+
+  // --- Crea mappa MapLibre 3D ---
   requestAnimationFrame(()=>{
     if(!document.getElementById('map3d'))return; // utente ha navigato via
     try{
@@ -1795,12 +1824,120 @@ function _init3D(){
     });
   });
 }
+/* ---- Fallback Leaflet 2D quando WebGL non è disponibile ---- */
+function _initLeaflet2D(container){
+  const ldr=document.getElementById('map3dLoading');
+  if(ldr){
+    ldr.innerHTML=`<div class="m3d-spin"></div>
+      <div style="color:#b8b0a8;font-size:13px;margin-top:4px">Caricamento mappa 2D…</div>
+      <div style="color:#c8a010;font-size:11.5px;margin-top:6px">⚠️ WebGL non disponibile su questo browser</div>`;
+  }
+  requestAnimationFrame(()=>{
+    if(!document.getElementById('map3d'))return;
+    try{
+      // Stile Leaflet più raffinato con CARTO tiles
+      map2dFallback=L.map('map3d',{center:[45.611,8.851],zoom:14,zoomControl:false,attributionControl:true});
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; <a href="https://carto.com/">CARTO</a> &copy; OSM',
+        subdomains:'abcd',maxZoom:19
+      }).addTo(map2dFallback);
+      L.control.zoom({position:'topright'}).addTo(map2dFallback);
+      L.control.scale({imperial:false,maxWidth:100}).addTo(map2dFallback);
+
+      // Nascondi spinner
+      if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+
+      // Banner avviso WebGL
+      const wrap=container.parentNode;
+      if(wrap&&!document.getElementById('_wglBanner')){
+        const banner=document.createElement('div');
+        banner.id='_wglBanner';
+        banner.style.cssText='position:absolute;bottom:14px;left:50%;transform:translateX(-50%);background:rgba(255,245,180,.96);border:1px solid #c8a010;border-radius:8px;padding:7px 14px;font-size:12px;color:#7a5c10;z-index:1000;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.18);pointer-events:auto;cursor:default';
+        banner.innerHTML='⚠️ Vista 3D non disponibile — WebGL disabilitato nel browser. <a href="https://support.google.com/chrome/answer/1220892" target="_blank" style="color:#4a3a00;font-weight:700">Come abilitarlo ↗</a>';
+        wrap.style.position='relative';
+        wrap.appendChild(banner);
+      }
+
+      // Marker zone OMI
+      ZONE.forEach(z=>{
+        const v=omi[z.n]||1500;
+        const col=v>1900?'#bf5628':v>1700?'#b5820a':'#4d6844';
+        const icon=L.divIcon({
+          html:`<div style="background:${col};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.32);border:1.5px solid rgba(255,255,255,.18);cursor:pointer">${v}€</div>`,
+          className:'',iconAnchor:[0,0]
+        });
+        L.marker([z.lat,z.lng],{icon})
+          .bindPopup(`<b style="font-size:14px;font-family:'Fraunces',serif">${z.n}</b><br><span style="font-size:12px;color:#666">OMI: <b>${v} €/mq</b></span>`)
+          .addTo(map2dFallback);
+      });
+
+      // Marker immobili in portafoglio
+      const colMap={acq:'#4d6844',mandato:'#c0572b',tratt:'#b5820a',vend:'#3b7347'};
+      const statoLabel={acq:'Acquisito',mandato:'In mandato',tratt:'In trattativa',vend:'Venduto'};
+      immobili.forEach(imm=>{
+        const z=zoneOf(imm.zona);
+        const jit=()=>(Math.random()-.5)*0.004;
+        const col=colMap[imm.stato]||'#888';
+        const icon=L.divIcon({
+          html:`<div style="width:13px;height:13px;border-radius:50%;background:${col};border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.45);cursor:pointer"></div>`,
+          className:'',iconAnchor:[6,6]
+        });
+        L.marker([z.lat+jit(),z.lng+jit()],{icon})
+          .bindPopup(`<div style="font-family:system-ui,sans-serif;font-size:13px">
+            <b>${imm.tipo}</b> · <span style="color:#888">${imm.zona}</span>
+            ${imm.ind?`<div style="color:#aaa;font-size:11px;margin-top:2px">${imm.ind}</div>`:''}
+            <div style="margin-top:5px"><b style="font-size:15px;color:#c0572b">${eur(imm.prezzo)}</b> · <span style="color:#666">${imm.mq} mq</span></div>
+            <div style="font-size:11px;color:#999;margin-top:2px">${statoLabel[imm.stato]||imm.stato}</div>
+          </div>`)
+          .addTo(map2dFallback);
+      });
+
+    }catch(e){
+      console.error('[2D] Leaflet fallback error:',e);
+      if(ldr){
+        ldr.style.cssText='display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;opacity:1;pointer-events:all;background:linear-gradient(135deg,#1a0e0e,#2d1515)';
+        ldr.innerHTML=`<div style="font-size:28px">⚠️</div>
+          <div style="color:#e0b0a0;font-size:14px;font-weight:600">Nessuna mappa disponibile</div>
+          <div style="color:#8a7070;font-size:12.5px;text-align:center;max-width:320px;line-height:1.5">WebGL disabilitato e Leaflet ha fallito.<br>Abilita l'accelerazione hardware nel browser.</div>
+          <a href="https://support.google.com/chrome/answer/1220892" target="_blank" style="background:#c0572b;color:#fff;padding:9px 18px;border-radius:8px;text-decoration:none;font-size:13px;font-weight:600">Come abilitare WebGL ↗</a>`;
+      }
+    }
+  });
+}
+
 function toggleCatastoLayer(show){
-  if(!map3dObj||!map3dReady)return;
-  try{
-    if(map3dObj.getLayer('catasto-layer'))
-      map3dObj.setLayoutProperty('catasto-layer','visibility',show?'visible':'none');
-  }catch(e){console.warn('[catasto]',e.message);}
+  // Modalità 3D (MapLibre)
+  if(map3dObj&&map3dReady){
+    try{
+      if(map3dObj.getLayer('catasto-layer'))
+        map3dObj.setLayoutProperty('catasto-layer','visibility',show?'visible':'none');
+    }catch(e){console.warn('[catasto]',e.message);}
+    return;
+  }
+  // Modalità 2D (Leaflet) — catasto via proxy
+  if(map2dFallback){
+    if(show){
+      if(!window._catasto2D){
+        // Crea WMS layer usando tile proxy (convertiamo bbox da Leaflet → EPSG:3857)
+        window._catasto2D=L.tileLayer(
+          '/api/catasto-tile?bbox={bbox}',
+          {opacity:0.55,attribution:'© Agenzia Entrate',
+           // Leaflet non supporta {bbox-epsg-3857} nativamente → usiamo custom
+           tileSize:256}
+        );
+        // Override per passare bbox corretto
+        window._catasto2D.getTileUrl=function(coords){
+          const b=this._tileCoordsToBounds(coords);
+          const toM=p=>L.CRS.EPSG3857.project(p);
+          const sw=toM(b.getSouthWest()), ne=toM(b.getNorthEast());
+          return `/api/catasto-tile?bbox=${sw.x},${sw.y},${ne.x},${ne.y}`;
+        };
+      }
+      window._catasto2D.addTo(map2dFallback);
+    }else{
+      if(window._catasto2D)map2dFallback.removeLayer(window._catasto2D);
+    }
+  }
 }
 
 /* ================================================================

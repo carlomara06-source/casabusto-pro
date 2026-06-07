@@ -144,42 +144,19 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
   if(!FRAME_ALLOWED.some(d=>urlObj.hostname.includes(d)))
     return res.status(403).send("Dominio non consentito");
 
-  // --- Scegli fetch strategy ---
-  // Con ScraperAPI (SCRAPERAPI_KEY impostato): esegue JS → bypassa Cloudflare
-  // Senza: fetch diretto con header Chrome → bypassa protezioni base
-  let fetchUrl = url;
-  let fetchHeaders = CHROME_HEADERS;
-
-  if(SCRAPERAPI_KEY){
-    // ScraperAPI: render=true esegue JavaScript (bypassa Cloudflare JS challenge)
-    fetchUrl = `https://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=it`;
-    fetchHeaders = {};
-    console.log(`[frame] ScraperAPI → ${urlObj.hostname}`);
-  }else{
-    console.log(`[frame] fetch diretto → ${urlObj.hostname}`);
+  // Controlla se l'HTML è una Cloudflare challenge
+  function isCloudflareChallenge(html){
+    return html.length < 10000 && (
+      html.includes("Just a moment") ||
+      html.includes("cf-browser-verification") ||
+      html.includes("challenge-platform") ||
+      html.includes("__cf_chl_")
+    );
   }
 
-  try{
-    const r=await fetch(fetchUrl,{
-      headers:fetchHeaders,
-      redirect:"follow",
-      signal:AbortSignal.timeout(SCRAPERAPI_KEY?35000:18000)
-    });
-
-    if(!r.ok && r.status===403){
-      throw new Error(`Cloudflare/bot-detection blocca la richiesta (HTTP 403). ${SCRAPERAPI_KEY?'':'Configura SCRAPERAPI_KEY nel .env per bypassarlo.'}`);
-    }
-
-    let html=await r.text();
-
-    // Controlla se la risposta è una Cloudflare challenge (HTML molto corto + "Just a moment")
-    if(html.length<6000 && (html.includes("Just a moment")|| html.includes("cf-browser-verification")||html.includes("challenge-platform"))){
-      throw new Error(`Cloudflare ha bloccato la richiesta con una challenge JS. ${SCRAPERAPI_KEY?'ScraperAPI dovrebbe bypassarla — riprova tra qualche secondo.':'Configura SCRAPERAPI_KEY=... nel .env per bypassarlo automaticamente.'}`);
-    }
-
-    // Inject <base> e helpers
-    const origin=urlObj.origin;
-    const inject=`<base href="${origin}/"><script>
+  // Inietta helpers nel HTML e invia la risposta
+  function sendProxied(res, html, contentType, origin){
+    const inject = `<base href="${origin}/"><script>
       (function(){
         function fixLinks(){
           document.querySelectorAll('a[href]').forEach(function(a){
@@ -187,51 +164,105 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
             if(!a.rel)a.rel='noopener noreferrer';
           });
         }
-        if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fixLinks);
+        if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',fixLinks);
         else fixLinks();
-        // Ri-applica ai link aggiunti dinamicamente
         new MutationObserver(fixLinks).observe(document.body||document.documentElement,{childList:true,subtree:true});
       })();
-    </script>`;
-    html=html.replace(/<head([^>]*)>/i,`<head$1>${inject}`);
+    <\/script>`;
+    html = html.replace(/<head([^>]*)>/i, `<head$1>${inject}`);
+    res.set("Content-Type", contentType || "text/html; charset=utf-8")
+       .set("X-Robots-Tag","noindex")
+       .send(html);
+  }
 
-    const ct=r.headers.get("content-type")||"text/html; charset=utf-8";
-    // Non inoltriamo X-Frame-Options né CSP (quello è il punto del proxy)
-    res.set("Content-Type",ct).set("X-Robots-Tag","noindex").send(html);
+  let lastError = "Sito non raggiungibile";
 
+  // === PASSO 1: Fetch diretto con Chrome headers (veloce, 12s) ===
+  try{
+    console.log(`[frame] passo 1 — fetch diretto → ${urlObj.hostname}`);
+    const r = await fetch(url, {
+      headers: CHROME_HEADERS,
+      redirect: "follow",
+      signal: AbortSignal.timeout(12000)
+    });
+    if(r.ok || r.status === 200){
+      const html = await r.text();
+      if(!isCloudflareChallenge(html) && html.length > 500){
+        console.log(`[frame] passo 1 OK (${html.length} chars)`);
+        return sendProxied(res, html, r.headers.get("content-type"), urlObj.origin);
+      }else{
+        lastError = "Cloudflare challenge rilevata — uso proxy avanzato";
+        console.log(`[frame] passo 1 bloccato da Cloudflare`);
+      }
+    }else{
+      lastError = `HTTP ${r.status}`;
+      console.log(`[frame] passo 1 → HTTP ${r.status}`);
+    }
   }catch(e){
-    const msg=e.name==="TimeoutError"?"Timeout — il sito non risponde in tempo":e.message;
-    const hasKey=!!SCRAPERAPI_KEY;
-    res.status(502).send(`<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
+    lastError = e.name === "TimeoutError" ? "Timeout fetch diretto (12s)" : e.message;
+    console.log(`[frame] passo 1 errore: ${lastError}`);
+  }
+
+  // === PASSO 2: ScraperAPI con rendering JS (bypassa Cloudflare) ===
+  if(SCRAPERAPI_KEY){
+    try{
+      const scraperUrl = `https://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=it&device_type=desktop`;
+      console.log(`[frame] passo 2 — ScraperAPI render=true → ${urlObj.hostname}`);
+      const r = await fetch(scraperUrl, {
+        signal: AbortSignal.timeout(55000) // ScraperAPI può essere lento (headless browser)
+      });
+      if(r.ok){
+        const html = await r.text();
+        if(html.length > 500){
+          console.log(`[frame] passo 2 ScraperAPI OK (${html.length} chars)`);
+          return sendProxied(res, html, r.headers.get("content-type"), urlObj.origin);
+        }else{
+          lastError = `ScraperAPI risposta vuota (${html.length} chars)`;
+        }
+      }else{
+        lastError = `ScraperAPI HTTP ${r.status}`;
+      }
+    }catch(e){
+      lastError = e.name==="TimeoutError"
+        ? "Timeout ScraperAPI (55s) — il sito è molto lento o il piano free ha esaurito i crediti"
+        : `ScraperAPI: ${e.message}`;
+      console.log(`[frame] passo 2 errore: ${lastError}`);
+    }
+  }
+
+  // === FALLBACK: pagina errore dettagliata ===
+  const hasKey = !!SCRAPERAPI_KEY;
+  res.status(502).send(`<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f4f2ed;color:#0f1a26;text-align:center;padding:32px}
-  h2{font-size:20px;font-weight:700;margin-bottom:10px}
-  p{color:#70706a;font-size:14px;max-width:420px;line-height:1.65;margin-bottom:20px}
+  h2{font-size:20px;font-weight:700;margin-bottom:12px}
   .btn{display:inline-block;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px}
   .btn-r{background:#c0572b;color:#fff}
   .btn-g{background:#fff;color:#333;border:1.5px solid #ddd}
-  .err{background:#fff3f0;border:1px solid #f0c8b8;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#8a4030;max-width:440px;text-align:left;margin-bottom:20px;line-height:1.5}
-  .tip{background:#f0f4ff;border:1px solid #b8c8f0;border-radius:10px;padding:14px 18px;font-size:12px;color:#2a3a5a;max-width:440px;text-align:left;line-height:1.6;margin-bottom:20px}
-  code{background:#e8e4e0;padding:2px 6px;border-radius:4px;font-family:monospace}
+  .err{background:#fff3f0;border:1px solid #f0c8b8;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#8a4030;max-width:460px;text-align:left;margin-bottom:18px;line-height:1.5}
+  .tip{background:#f0f4ff;border:1px solid #b8c8f0;border-radius:10px;padding:14px 18px;font-size:12px;color:#2a3a5a;max-width:460px;text-align:left;line-height:1.7;margin-bottom:18px}
+  code{background:#e8e4e0;padding:2px 6px;border-radius:4px;font-family:monospace;font-size:11.5px}
 </style>
 </head><body>
   <div style="font-size:44px;margin-bottom:14px">🔒</div>
   <h2>${urlObj.hostname} non accessibile in anteprima</h2>
-  <div class="err">${msg}</div>
-  ${!hasKey?`<div class="tip">
-    <b>💡 Per bypassare il blocco:</b><br>
-    1. Crea account gratuito su <b>scraperapi.com</b> (5.000 req/mese gratis)<br>
-    2. Copia la tua API key<br>
-    3. Aggiungila su Render: variabile <code>SCRAPERAPI_KEY</code> = la tua chiave<br>
-    4. Riavvia il deploy — i portali si caricheranno automaticamente
-  </div>`:''}
+  <div class="err"><b>Errore:</b> ${lastError}</div>
+  ${hasKey
+    ? `<div class="tip">✓ ScraperAPI configurata ma il sito ha comunque bloccato la richiesta.<br>
+        Possibili cause: crediti esauriti · piano free limitato · sito con protezione extra.<br>
+        Controlla i crediti su <a href="https://www.scraperapi.com/dashboard" target="_blank" style="color:#3a5aa0">scraperapi.com/dashboard</a>.</div>`
+    : `<div class="tip"><b>💡 Per bypassare il blocco:</b><br>
+        1. Crea account gratuito su <a href="https://www.scraperapi.com/" target="_blank" style="color:#3a5aa0">scraperapi.com</a> (5.000 req/mese gratis)<br>
+        2. Copia la tua API key dalla dashboard<br>
+        3. Su Render → Environment → aggiungi <code>SCRAPERAPI_KEY</code> = tua chiave<br>
+        4. Riavvia il deploy — i portali si caricheranno automaticamente</div>`
+  }
   <div>
     <a href="${url}" target="_blank" class="btn btn-r">Apri ${urlObj.hostname} ↗</a>
     <a href="javascript:history.back()" class="btn btn-g">← Torna</a>
   </div>
 </body></html>`);
-  }
 });
 
 // =================== ANALISI FOTO AI (Claude) ===================

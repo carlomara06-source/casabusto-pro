@@ -220,6 +220,88 @@ app.get("/api/catasto-tile", requireLogin, async (req, res) => {
   }
 });
 
+// =================== ANNUNCI LIVE (RSS Immobiliare.it) ===================
+const ZONE_BUSTO = [
+  "Centro","Tribunale","Sant'Edoardo","Sant'Anna","Santissimi Apostoli",
+  "San Michele","Madonna Regina","Redentore","Beata Giuliana","Borsano","Sacconago"
+];
+// heuristic: cerca nomi zona nel testo libero
+function detectZoneBusto(text){
+  const t = (text||'').toLowerCase();
+  for(const z of ZONE_BUSTO){
+    if(t.includes(z.toLowerCase())) return z;
+  }
+  // via → zona lookup per le strade principali
+  const viaMap = {
+    'via galvani':'Centro','via magenta':'Centro','corso sempione':'Centro',
+    'piazza vittoria':'Centro','via manzoni':'Centro','viale stelvio':'Centro',
+    'via marsala':'Tribunale','via duca d\'aosta':'Tribunale','viale dandolo':'Tribunale',
+    'via foscolo':"Sant'Anna",'via leopardi':"Sant'Anna",'via mameli':"Sant'Edoardo",
+    'via san michele':'San Michele','via redentore':'Redentore',
+    'via borsano':'Borsano','via sacconago':'Sacconago','via giuliana':'Beata Giuliana',
+    'via madonna regina':'Madonna Regina',
+  };
+  for(const[via,zona] of Object.entries(viaMap)){
+    if(t.includes(via)) return zona;
+  }
+  return null;
+}
+function xmlGet(item, tag){
+  const m = item.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`, 'i'));
+  return (m?.[1]||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+}
+
+app.get("/api/annunci-live", requireLogin, async (req, res) => {
+  const annunci = [];
+  const feeds = [
+    { nome:"Immobiliare.it", url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/" },
+    { nome:"Immobiliare.it", url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-affitto/busto-arsizio-varese/", contratto:"affitto" }
+  ];
+  for(const feed of feeds){
+    try{
+      const r = await fetch(feed.url,{
+        headers:{
+          'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept':'application/rss+xml,application/xml,text/xml,*/*',
+          'Accept-Language':'it-IT,it;q=0.9',
+        },
+        signal: AbortSignal.timeout(12000)
+      });
+      if(!r.ok){ console.warn(`[annunci] ${feed.nome} HTTP ${r.status}`); continue; }
+      const xml = await r.text();
+      if(!xml.includes('<item>')){ console.warn(`[annunci] ${feed.nome} no <item> in response`); continue; }
+      const items = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
+      for(const [,it] of items.slice(0,30)){
+        const titolo = xmlGet(it,'title');
+        const desc   = xmlGet(it,'description');
+        const link   = xmlGet(it,'link');
+        const pub    = xmlGet(it,'pubDate');
+        const full   = titolo+' '+desc;
+        // prezzo
+        const pm = full.match(/(?:€|EUR)\s*([\d.,\s]{3,12})/i);
+        let prezzo = pm ? parseInt(pm[1].replace(/[.,\s]/g,'')) : 0;
+        if(prezzo<10000||prezzo>9000000) prezzo=0;
+        // mq
+        const am = full.match(/(\d{2,4})\s*m[²q2]/i);
+        const mq = am ? parseInt(am[1]) : 0;
+        // zona
+        const zona = detectZoneBusto(full)||'N/D';
+        // tipo
+        const tm = titolo.match(/^(bilocale|trilocale|quadrilocale|quintilocale|monolocale|villa|attico|appartamento|casa|loft|rustico|mansarda|studio)/i);
+        const tipo = tm ? tm[1][0].toUpperCase()+tm[1].slice(1).toLowerCase() : 'Appartamento';
+        annunci.push({fonte:feed.nome,contratto:feed.contratto||'vendita',tipo,zona,mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate:pub,desc:desc.slice(0,200)});
+      }
+    }catch(e){ console.warn(`[annunci] ${feed.nome}:`, e.message); }
+  }
+  const portali = [
+    {nome:'Immobiliare.it',url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/',color:'#e8392a'},
+    {nome:'Idealista',     url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/',  color:'#006699'},
+    {nome:'Casa.it',       url:'https://www.casa.it/vendita/residenziale/busto-arsizio/',       color:'#ff6633'},
+    {nome:'Wikicasa',      url:'https://www.wikicasa.it/vendita-case/busto-arsizio/',           color:'#28a745'},
+  ];
+  res.json({ok:true, totale:annunci.length, annunci, portali, ts:new Date().toISOString()});
+});
+
 // =================== FILE STATICI (l'app) ===================
 // L'app (index.html) viene servita da qui. È protetta: senza login l'API non risponde.
 app.use(express.static(path.join(__dirname, "public")));

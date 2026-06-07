@@ -663,12 +663,18 @@ function moveLead(id,d){const l=leads.find(x=>x.id===id);const idx=FASI.findInde
   const ni=Math.max(0,Math.min(FASI.length-1,idx+d));l.fase=FASI[ni][0];persist();render();}
 
 /* ---------- ANNUNCI & MERCATO ---------- */
-let mapAnn=null;
+let mapAnn=null, annunciTab='manual'; // 'manual' | 'live'
 function vAnnunci(){
-  document.getElementById('topAct').innerHTML=`<button class="btn btn-p" onclick="modalAnnuncio()">＋ Aggiungi annuncio</button>`;
+  document.getElementById('topAct').innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">I miei annunci</button>
+      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">Annunci live ↗</button>
+      ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋ Aggiungi</button>`:''}
+    </div>`;
+  if(annunciTab==='live'){ caricaAnnunciLive(); return; }
   const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
   document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:18px">Questi sono gli annunci che <b>inserisci tu</b> (da privati, colleghi, segnalazioni). L'app li geolocalizza per zona così individui dove ci sono immobili disponibili o vuoti da acquisire.</div>
+    <div class="note" style="margin-bottom:18px">Inserisci manualmente gli annunci che noti sul territorio (da privati, colleghi, segnalazioni). Usa <b>Annunci live</b> per caricare gli annunci attivi da Immobiliare.it divisi per quartiere.</div>
     <div class="grid g3" style="margin-bottom:18px">
       ${stat('Annunci monitorati',annunci.length,'sul territorio','⚲')}
       ${stat('Immobili vuoti',vuoti,'opportunità di acquisizione','⌂')}
@@ -679,11 +685,13 @@ function vAnnunci(){
       <div class="card" style="max-height:560px;overflow-y:auto">
         <div class="sect-t"><span class="bar"></span>Lista annunci</div>
         ${annunci.map(a=>`<div style="padding:11px 0;border-bottom:1px solid var(--line)">
-          <div style="display:flex;justify-content:space-between"><b>${a.tipo}</b>${a.stato==='vuoto'?'<span class="tag t-lead">vuoto</span>':'<span class="tag t-acq">disp.</span>'}</div>
-          <div style="font-size:12.5px;color:var(--muted)">${a.zona} · ${a.mq}mq · ${eur(a.prezzo)} · ${a.agenzia}</div>
-          <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="annToLead('${a.id}')">→ Crea lead acquisizione</button>
-          <button class="btn btn-g btn-sm" style="margin-top:6px" onclick="delItem('annunci','${a.id}')">✕</button>
-        </div>`).join('')||'<div class="empty">Nessun annuncio</div>'}
+          <div style="display:flex;justify-content:space-between;gap:8px"><b>${a.tipo}</b>${a.stato==='vuoto'?'<span class="tag t-lead">vuoto</span>':'<span class="tag t-acq">disp.</span>'}</div>
+          <div style="font-size:12px;color:var(--muted);margin-top:3px">${a.zona} · ${a.mq}mq · ${eur(a.prezzo)} · ${a.agenzia}</div>
+          <div style="display:flex;gap:5px;margin-top:7px">
+            <button class="btn btn-p btn-sm" onclick="annToLead('${a.id}')">→ Lead</button>
+            <button class="btn btn-g btn-sm" onclick="delItem('annunci','${a.id}')">✕</button>
+          </div>
+        </div>`).join('')||'<div class="empty">Nessun annuncio<br><span style="font-size:12px">Aggiungi manualmente o carica i live</span></div>'}
       </div>
     </div>`;
   setTimeout(()=>{
@@ -692,14 +700,141 @@ function vAnnunci(){
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{attribution:'© OpenStreetMap, © CARTO',maxZoom:19}).addTo(mapAnn);
     annunci.forEach(a=>{const z=zoneOf(a.zona);const jit=()=>(Math.random()-.5)*0.006;
       const m=L.circleMarker([z.lat+jit(),z.lng+jit()],{radius:9,color:'#fff',weight:2,
-        fillColor:a.stato==='vuoto'?'#b5562f':'#5f6b3c',fillOpacity:.95}).addTo(mapAnn);
+        fillColor:a.stato==='vuoto'?'#c0572b':'#4d6844',fillOpacity:.95}).addTo(mapAnn);
       m.bindPopup(`<b>${a.tipo}</b> · ${a.zona}<br>${a.mq}mq · ${eur(a.prezzo)}<br>${a.agenzia} · ${a.stato}`);
     });
   },60);
 }
-function annToLead(id){const a=annunci.find(x=>x.id===id);
-  leads.push({id:uid(),nome:`Annuncio ${a.tipo} ${a.zona}`,zona:a.zona,tel:'',fonte:a.agenzia,fase:'contatto',note:`Da annuncio: ${a.mq}mq, ${eur(a.prezzo)}, stato ${a.stato}`});
-  persist();alert('Lead creato nella pipeline di acquisizione!');}
+function annToLead(id){
+  const a=annunci.find(x=>x.id===id);
+  leads.push({id:uid(),nome:`Annuncio ${a.tipo} ${a.zona}`,zona:a.zona,tel:'',fonte:a.agenzia,fase:'contatto',
+    note:`Da annuncio: ${a.mq}mq, ${eur(a.prezzo)}, stato ${a.stato}`,createdAt:new Date().toISOString()});
+  persist();alert('Lead creato nella pipeline di acquisizione!');
+}
+
+/* --- Annunci LIVE (RSS proxy server) --- */
+let _annunciLiveCache=null;
+async function caricaAnnunciLive(){
+  annunciTab='live';
+  document.getElementById('topAct').innerHTML=`
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-g btn-sm" onclick="annunciTab='manual';vAnnunci()">← I miei annunci</button>
+      <button class="btn btn-g btn-sm" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Ricarica</button>
+    </div>`;
+  if(_annunciLiveCache){ renderAnnunciLive(_annunciLiveCache); return; }
+  document.getElementById('view').innerHTML=`<div class="card" style="text-align:center;padding:50px 20px">
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Caricamento annunci live…</div>
+    <div style="font-size:13px;color:var(--muted)">Recupero dati da Immobiliare.it</div></div>`;
+  try{
+    const r=await fetch('/api/annunci-live',{credentials:'same-origin',headers:authHeaders()});
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    _annunciLiveCache=data;
+    renderAnnunciLive(data);
+  }catch(e){
+    document.getElementById('view').innerHTML=`<div class="card">
+      <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d)">
+        <b>Errore nel caricamento:</b> ${e.message}<br>
+        <span style="font-size:12px">Verifica la connessione o usa i link diretti ai portali qui sotto.</span>
+      </div>
+      ${portalLinks()}</div>`;
+  }
+}
+function portalLinks(portali){
+  const ps=portali||[
+    {nome:'Immobiliare.it',url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/',color:'#e8392a'},
+    {nome:'Idealista',     url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/',  color:'#006699'},
+    {nome:'Casa.it',       url:'https://www.casa.it/vendita/residenziale/busto-arsizio/',       color:'#ff6633'},
+    {nome:'Wikicasa',      url:'https://www.wikicasa.it/vendita-case/busto-arsizio/',           color:'#28a745'},
+  ];
+  return `<div class="grid g4" style="margin-top:16px">
+    ${ps.map(p=>`<a href="${p.url}" target="_blank" style="text-decoration:none">
+      <div class="card" style="text-align:center;padding:16px 12px;border-top:3px solid ${p.color}">
+        <div style="font-weight:700;font-size:13.5px;color:var(--ink);margin-bottom:4px">${p.nome}</div>
+        <div style="font-size:11px;color:var(--muted)">Apri ricerca →</div>
+      </div></a>`).join('')}
+  </div>`;
+}
+function renderAnnunciLive(data){
+  if(!data){
+    document.getElementById('view').innerHTML=`<div class="note">Premi <b>Annunci live</b> per caricare gli annunci da Immobiliare.it.</div>${portalLinks()}`;
+    return;
+  }
+  // raggruppa per zona
+  const byZone={};
+  for(const a of data.annunci){
+    if(!byZone[a.zona]) byZone[a.zona]=[];
+    byZone[a.zona].push(a);
+  }
+  const known=ZONE.map(z=>z.n).filter(n=>byZone[n]);
+  const nd=byZone['N/D']||[];
+  // stats
+  const withPrice=data.annunci.filter(a=>a.prezzo>0);
+  const avgPrice=withPrice.length?Math.round(withPrice.reduce((s,a)=>s+a.prezzo,0)/withPrice.length/1000)*1000:0;
+  const ts=new Date(data.ts);
+  const age=Math.round((Date.now()-ts)/60000);
+  document.getElementById('view').innerHTML=`
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div class="note" style="flex:1;min-width:200px">
+        <b>${data.totale}</b> annunci trovati su Immobiliare.it ·
+        <b>${known.length}</b> zone coperte ·
+        aggiornato ${age<2?'ora':age+' min fa'}
+      </div>
+    </div>
+    <!-- Portali link -->
+    ${portalLinks(data.portali)}
+    <!-- Statistiche -->
+    <div class="grid g3" style="margin:20px 0">
+      ${stat('Annunci trovati',data.totale,'da Immobiliare.it (vendita + affitto)','⚲')}
+      ${stat('Prezzo medio vendita',avgPrice?eur(avgPrice):'—','annunci con prezzo','€')}
+      ${stat('Zone con annunci',known.length,'quartieri di Busto','◎')}
+    </div>
+    <!-- Per zona (ordine valore OMI decrescente) -->
+    ${known.map(n=>{
+      const list=byZone[n];
+      const prezzi=list.filter(a=>a.prezzo>0&&a.contratto==='vendita').map(a=>a.prezzo);
+      const med=prezzi.length?Math.round(prezzi.reduce((s,p)=>s+p,0)/prezzi.length/1000)*1000:0;
+      return `<div class="card" style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="sect-t" style="margin:0"><span class="bar"></span>${n}</div>
+          <div style="display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;text-align:right">
+            ${omi[n]?`<span><b style="color:var(--terra)">${omi[n]} €/mq</b> valore OMI</span>`:''}
+            <span><b>${list.length}</b> annunci</span>
+            ${med?`<span>prezzo medio <b style="color:var(--ink)">${eur(med)}</b></span>`:''}
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+          ${list.map(a=>`<div style="border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--paper);display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+              <div style="font-weight:700;font-size:13px">${a.tipo}${a.mq?' · '+a.mq+' mq':''}</div>
+              <span class="tag" style="background:${a.contratto==='affitto'?'#edf0f5':'var(--terra-l)'};color:${a.contratto==='affitto'?'var(--slate)':'var(--terra-d)'};white-space:nowrap">${a.contratto}</span>
+            </div>
+            <div style="font-size:15px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif">${a.prezzo?eur(a.prezzo):'Prezzo su richiesta'}</div>
+            ${a.mq&&a.prezzo?`<div style="font-size:11px;color:var(--muted)">${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq stimato</div>`:''}
+            <div style="font-size:11.5px;color:var(--muted);line-height:1.5;flex:1">${(a.desc||a.titolo||'').slice(0,150)}</div>
+            <div style="display:flex;gap:6px;margin-top:4px">
+              <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Vedi ↗</a>
+              <button class="btn btn-p btn-sm" data-tipo="${a.tipo}" data-zona="${n}" data-mq="${a.mq||0}" data-prezzo="${a.prezzo||0}" data-fonte="${a.fonte}" onclick="annuncioLiveToLead(this)">＋ Lead</button>
+            </div>
+          </div>`).join('')}
+        </div>
+      </div>`}).join('')}
+    ${nd.length?`<div class="card"><div class="sect-t"><span class="bar"></span>Zona non determinata</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
+        ${nd.map(a=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--paper)">
+          <div style="font-weight:700;font-size:13px">${a.tipo}${a.mq?' · '+a.mq+' mq':''}</div>
+          <div style="font-size:14px;font-weight:700;color:var(--terra);margin:4px 0">${a.prezzo?eur(a.prezzo):'—'}</div>
+          <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:8px">${(a.titolo||'').slice(0,120)}</div>
+          <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Vedi ↗</a>
+        </div>`).join('')}
+      </div></div>`:''}`;
+}
+function annuncioLiveToLead(btn){
+  const {tipo,zona,mq,prezzo,fonte}=btn.dataset;
+  leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Immobiliare.it',fase:'contatto',
+    note:`Da ${fonte}: ${mq>0?mq+'mq, ':''}${prezzo>0?eur(+prezzo):'prezzo n.d.'}`,createdAt:new Date().toISOString()});
+  persist();btn.textContent='✓ Creato';btn.disabled=true;
+}
 
 /* ---------- ASTE GIUDIZIARIE ---------- */
 let mapAste=null;
@@ -741,64 +876,228 @@ function vAste(){
   },60);
 }
 
-/* ---------- VALUTAZIONE ---------- */
+/* ---------- VALUTAZIONE (metodo OMI / estimo) ---------- */
+/*
+  Coefficienti di merito basati su:
+  - Tabelle OMI Agenzia delle Entrate (manuale operativo stima immobiliare)
+  - Linee guida tecnico-estimative CNAPPC / Consiglio Nazionale Geometri
+  - Codice delle valutazioni immobiliari (Tecnoborsa, V ed.)
+  Ogni coefficiente modifica il prezzo base OMI in modo moltiplicativo.
+  Le pertinenze (box, balconi) si aggiungono come valore assoluto con i coefficienti
+  OMI per le superfici accessorie (25% scoperto, 40% coperto, 25% box).
+*/
 function vValut(){
   document.getElementById('view').innerHTML=`
-    <div class="grid" style="grid-template-columns:340px 1fr;gap:16px">
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>Dati immobile</div>
-        <div class="fld"><label>Zona</label><select id="vl_zona" onchange="calcValut()">${ZONE.map(z=>`<option>${z.n}</option>`).join('')}</select></div>
-        <div class="fld"><label>Superficie (mq)</label><input id="vl_mq" type="number" value="90" oninput="calcValut()"></div>
-        <div class="fld"><label>Tipologia</label><select id="vl_tipo" onchange="calcValut()">
-          <option value="1">Appartamento standard</option>
-          <option value="1.08">Appartamento qualità superiore</option>
-          <option value="0.88">Appartamento qualità inferiore</option>
-          <option value="0.95">Villa / porzione</option></select></div>
-        <div class="fld"><label>Stato conservativo</label><select id="vl_stato" onchange="calcValut()">
-          <option value="1">Normale / abitabile</option>
-          <option value="1.15">Ristrutturato / nuovo</option>
-          <option value="0.8">Da ristrutturare</option></select></div>
-        <div class="fld"><label>Piano</label><select id="vl_piano" onchange="calcValut()">
-          <option value="1">Piano intermedio</option>
-          <option value="1.05">Ultimo / attico</option>
-          <option value="0.95">Piano terra / rialzato</option></select></div>
-        <div class="fld"><label>Ascensore</label><select id="vl_asc" onchange="calcValut()">
-          <option value="1">Presente o non rilevante</option>
-          <option value="0.93">Assente (oltre 2° piano)</option></select></div>
-      </div>
-      <div>
-        <div class="card" style="text-align:center;padding:30px 20px;margin-bottom:16px">
-          <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600">Valore di mercato stimato</div>
-          <div id="vl_out" class="disp" style="font-size:46px;font-weight:600;color:var(--terra);margin:10px 0;line-height:1"></div>
-          <div id="vl_range" style="font-size:14px;color:var(--slate)"></div>
-          <div id="vl_mqval" style="font-size:12.5px;color:var(--muted);margin-top:6px"></div>
+  <div class="grid" style="grid-template-columns:340px 1fr;gap:16px;align-items:start">
+    <div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="sect-t"><span class="bar"></span>Posizione e caratteristiche</div>
+        <div class="fld"><label>Zona</label>
+          <select id="vl_zona" onchange="calcValut()">${ZONE.map(z=>`<option>${z.n}</option>`).join('')}</select></div>
+        <div class="fld-row">
+          <div class="fld"><label>Superficie utile (mq)</label>
+            <input id="vl_mq" type="number" value="90" oninput="calcValut()"></div>
+          <div class="fld"><label>Tipologia</label>
+            <select id="vl_tipo" onchange="calcValut()">
+              <option value="1">Appartamento standard</option>
+              <option value="1.10">Appartamento qualità superiore</option>
+              <option value="0.88">Appartamento qualità inferiore</option>
+              <option value="1.14">Attico / penthouse</option>
+              <option value="0.93">Villa / casa indipendente</option>
+              <option value="0.85">Rustico / cascina</option>
+            </select></div>
         </div>
-        <div class="note">Stima indicativa basata sui prezzi di mercato reali per zona (fonti: Immobiliare.it, idealista, Borsino Immobiliare). <b>Non sostituisce una perizia</b>: usala come riferimento iniziale da mostrare al proprietario, poi conferma con un sopralluogo.</div>
-        <button class="btn btn-p" style="margin-top:14px" onclick="valutToText()">Genera testo valutazione per il proprietario →</button>
-        <div id="vl_text" class="out-box" style="margin-top:14px;display:none"></div>
+        <div class="fld-row">
+          <div class="fld"><label>Mq balcone scoperto</label>
+            <input id="vl_balc" type="number" value="0" min="0" oninput="calcValut()"></div>
+          <div class="fld"><label>Mq terrazzo / loggia</label>
+            <input id="vl_terr" type="number" value="0" min="0" oninput="calcValut()"></div>
+        </div>
       </div>
-    </div>`;
+      <div class="card" style="margin-bottom:14px">
+        <div class="sect-t"><span class="bar"></span>Stato, età e efficienza</div>
+        <div class="fld"><label>Stato conservativo</label>
+          <select id="vl_stato" onchange="calcValut()">
+            <option value="1.26">Nuovo / mai abitato</option>
+            <option value="1.15">Ristrutturato (ultimi 10 anni)</option>
+            <option value="1">Normale / buono stato (rif.)</option>
+            <option value="0.84">Da ristrutturare parzialmente</option>
+            <option value="0.70">Da ristrutturare totalmente</option>
+          </select></div>
+        <div class="fld"><label>Anno di costruzione</label>
+          <select id="vl_anno" onchange="calcValut()">
+            <option value="1.02">Post 2010 (norme sismiche, buona classe)</option>
+            <option value="1" selected>1990–2010 (riferimento)</option>
+            <option value="0.97">1975–1990 (pre-norme sismiche L.64/74)</option>
+            <option value="0.94">1960–1975 (boom edilizio)</option>
+            <option value="0.96">Pre-1960 / storico</option>
+          </select></div>
+        <div class="fld"><label>Classe energetica (APE)</label>
+          <select id="vl_ener" onchange="calcValut()">
+            <option value="1.12">A4 / A3 — ≤ 30 kWh/m²a</option>
+            <option value="1.08">A2 / A1</option>
+            <option value="1.04">B</option>
+            <option value="1.02">C</option>
+            <option value="1" selected>D (riferimento)</option>
+            <option value="0.96">E</option>
+            <option value="0.91">F</option>
+            <option value="0.86">G — > 175 kWh/m²a</option>
+          </select></div>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="sect-t"><span class="bar"></span>Piano, accessibilità e luce</div>
+        <div class="fld"><label>Piano</label>
+          <select id="vl_piano" onchange="calcValut()">
+            <option value="0.96">Piano terra / seminterrato</option>
+            <option value="0.98">1° piano</option>
+            <option value="1" selected>2°–4° piano (riferimento)</option>
+            <option value="1.03">5° piano e oltre</option>
+            <option value="1.06">Ultimo piano / attico</option>
+          </select></div>
+        <div class="fld"><label>Ascensore</label>
+          <select id="vl_asc" onchange="calcValut()">
+            <option value="1">Presente</option>
+            <option value="0.97">Assente — 1° o 2° piano</option>
+            <option value="0.93">Assente — 3° piano e oltre</option>
+          </select></div>
+        <div class="fld"><label>Esposizione prevalente</label>
+          <select id="vl_esp" onchange="calcValut()">
+            <option value="1.05">Angolo (≥ 3 esposizioni)</option>
+            <option value="1.03">Sud (piena luce)</option>
+            <option value="1.02">Sud-Est / Sud-Ovest</option>
+            <option value="1" selected>Est / Ovest (riferimento)</option>
+            <option value="0.96">Nord-Est / Nord-Ovest</option>
+            <option value="0.92">Nord (scarsa luce)</option>
+          </select></div>
+        <div class="fld"><label>Luminosità interna</label>
+          <select id="vl_lum" onchange="calcValut()">
+            <option value="1.04">Eccellente — ambienti molto luminosi</option>
+            <option value="1" selected>Buona (riferimento)</option>
+            <option value="0.94">Scarsa — espos. unica, cortile</option>
+            <option value="0.87">Molto scarsa — cortile cieco</option>
+          </select></div>
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Impianti e pertinenze</div>
+        <div class="fld"><label>Riscaldamento</label>
+          <select id="vl_risc" onchange="calcValut()">
+            <option value="1.04">Pompa di calore / geotermico</option>
+            <option value="1" selected>Autonomo a gas (riferimento)</option>
+            <option value="0.98">Centralizzato con valvole termost.</option>
+            <option value="0.94">Centralizzato senza valvole</option>
+            <option value="0.89">Assente / da installare</option>
+          </select></div>
+        <div class="fld"><label>Box / parcheggio</label>
+          <select id="vl_box" onchange="calcValut()">
+            <option value="0">Nessuno</option>
+            <option value="6000">Posto auto scoperto (+ € 6.000)</option>
+            <option value="11000">Posto auto coperto / box moto (+ € 11.000)</option>
+            <option value="17000">Box singolo (+ € 17.000)</option>
+            <option value="28000">Box doppio (+ € 28.000)</option>
+          </select></div>
+        <div class="fld"><label>Condizionamento</label>
+          <select id="vl_ac" onchange="calcValut()">
+            <option value="1" selected>Assente o non rilevante</option>
+            <option value="1.02">Fisso (split in più ambienti)</option>
+          </select></div>
+      </div>
+    </div>
+    <div>
+      <div class="card" style="text-align:center;padding:32px 24px;margin-bottom:16px">
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;font-weight:700;margin-bottom:10px">Valore di mercato stimato</div>
+        <div id="vl_out" style="font-family:'Fraunces',serif;font-size:52px;font-weight:600;color:var(--terra);line-height:1;letter-spacing:-.03em"></div>
+        <div id="vl_range" style="font-size:13.5px;color:var(--slate);margin-top:10px"></div>
+        <div id="vl_mqval" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+        <button class="btn btn-p" style="margin-top:18px" onclick="valutToText()">Genera testo per il proprietario →</button>
+      </div>
+      <div class="card" style="margin-bottom:14px">
+        <div class="sect-t"><span class="bar"></span>Analisi coefficienti di merito</div>
+        <div id="vl_breakdown"></div>
+        <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5">
+          Metodo: valore OMI zona × prodotto coefficienti di merito + pertinenze (sup.commerciale OMI).<br>
+          Balcone scoperto: 25% del €/mq · Terrazzo/loggia: 40% del €/mq · Box: valore assoluto.
+        </div>
+      </div>
+      <div class="note">
+        Stima indicativa basata sui valori OMI ufficiali (Agenzia delle Entrate) e sui coefficienti di merito del
+        <b>Codice delle Valutazioni Immobiliari Tecnoborsa</b> (V ed.) e del manuale operativo OMI.
+        <b>Non sostituisce una perizia ufficiale.</b> Usala come base per il colloquio col proprietario, poi
+        conferma con sopralluogo e riscontro sul mercato locale.
+      </div>
+      <div id="vl_text" class="out-box" style="margin-top:14px;display:none"></div>
+    </div>
+  </div>`;
   calcValut();
 }
+
 function calcValut(){
-  const z=val('vl_zona'),mq=+val('vl_mq')||0,base=omi[z]||MERCATO.mediaCitta;
-  const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_piano'))*(+val('vl_asc'));
-  const mqVal=Math.round(base*f), tot=mqVal*mq;
-  document.getElementById('vl_out').textContent=eur(Math.round(tot/1000)*1000);
-  document.getElementById('vl_range').textContent='Range: '+eur(Math.round(tot*0.92/1000)*1000)+' — '+eur(Math.round(tot*1.08/1000)*1000);
-  document.getElementById('vl_mqval').textContent=`Valore unitario stimato: ${mqVal} €/mq (base zona ${z}: ${base} €/mq)`;
+  const z=val('vl_zona'), mq=+val('vl_mq')||0;
+  const balc=+val('vl_balc')||0, terr=+val('vl_terr')||0;
+  const base=omi[z]||MERCATO.mediaCitta;
+  const ft=+val('vl_tipo'), fs=+val('vl_stato'), fan=+val('vl_anno');
+  const fe=+val('vl_ener'), fp=+val('vl_piano'), fa=+val('vl_asc');
+  const fesp=+val('vl_esp'), fl=+val('vl_lum'), fr=+val('vl_risc'), fac=+val('vl_ac');
+  const box=+val('vl_box')||0;
+  // prodotto coefficienti
+  const f=ft*fs*fan*fe*fp*fa*fesp*fl*fr*fac;
+  const mqVal=Math.round(base*f);
+  // superfici commerciali OMI: balcone scoperto 25%, terrazzo/loggia 40%
+  const vBalc=Math.round(balc*base*f*0.25);
+  const vTerr=Math.round(terr*base*f*0.40);
+  const totale=Math.round((mqVal*mq+vBalc+vTerr+box)/1000)*1000;
+  // output
+  document.getElementById('vl_out').textContent=eur(totale);
+  document.getElementById('vl_range').textContent=
+    'Range: '+eur(Math.round(totale*.90/1000)*1000)+' — '+eur(Math.round(totale*1.10/1000)*1000);
+  document.getElementById('vl_mqval').textContent=
+    `${mqVal} €/mq · base zona: ${base} €/mq · coeff. tot.: ${f.toFixed(3)}`;
+  // breakdown
+  const fmtC=v=>{const p=Math.round((v-1)*100);return(p===0?'<span style="color:var(--muted)">–</span>':`<b style="color:${p>0?'var(--ok)':'var(--terra)'}">${p>0?'+':''}${p}%</b>`)};
+  const rows=[
+    ['Base zona '+z, `${base} €/mq`,true],
+    ['Superficie utile', `${mq} mq`,true],
+    ['Tipologia',       fmtC(ft), ft!==1],
+    ['Stato conservativo', fmtC(fs), fs!==1],
+    ['Anno costruzione',fmtC(fan),fan!==1],
+    ['Classe energetica',fmtC(fe),fe!==1],
+    ['Piano',           fmtC(fp), fp!==1],
+    ['Ascensore',       fmtC(fa), fa!==1],
+    ['Esposizione',     fmtC(fesp),fesp!==1],
+    ['Luminosità',      fmtC(fl), fl!==1],
+    ['Riscaldamento',   fmtC(fr), fr!==1],
+    ['Condizionamento', fmtC(fac),fac!==1],
+    ...(balc>0?[[`Balcone scoperto (${balc}mq × 25%)`,`+ ${eur(vBalc)}`,true]]:[]),
+    ...(terr>0?[[`Terrazzo/loggia (${terr}mq × 40%)`,`+ ${eur(vTerr)}`,true]]:[]),
+    ...(box>0?[['Box/parcheggio',`+ ${eur(box)}`,true]]:[]),
+    ['<b>Coefficiente complessivo</b>',`<b>${f.toFixed(3)}</b>`,true],
+    ['<b>Valore stimato</b>',`<b style="color:var(--terra);font-size:14px">${eur(totale)}</b>`,true],
+  ].filter(r=>r[2]!==false);
+  document.getElementById('vl_breakdown').innerHTML=rows.map(r=>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px">
+      <span style="color:var(--muted)">${r[0]}</span><span>${r[1]}</span></div>`
+  ).join('');
 }
+
 function valutToText(){
-  const z=val('vl_zona'),mq=+val('vl_mq')||0,base=omi[z]||MERCATO.mediaCitta;
-  const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_piano'))*(+val('vl_asc'));
-  const tot=Math.round(base*f*mq/1000)*1000;
+  const z=val('vl_zona'), mq=+val('vl_mq')||0;
+  const base=omi[z]||MERCATO.mediaCitta;
+  const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_anno'))*(+val('vl_ener'))*
+          (+val('vl_piano'))*(+val('vl_asc'))*(+val('vl_esp'))*(+val('vl_lum'))*
+          (+val('vl_risc'))*(+val('vl_ac'));
+  const box=+val('vl_box')||0;
+  const balc=+val('vl_balc')||0, terr=+val('vl_terr')||0;
+  const vBalc=Math.round(balc*base*f*0.25), vTerr=Math.round(terr*base*f*0.40);
+  const tot=Math.round((Math.round(base*f)*mq+vBalc+vTerr+box)/1000)*1000;
   const t=`VALUTAZIONE INDICATIVA — ${z}, Busto Arsizio\n\n`+
-    `Immobile: ${mq} mq in zona ${z}.\n`+
-    `Sulla base dei valori di mercato attuali della zona (circa ${base} €/mq per immobili residenziali) e delle caratteristiche dichiarate, il valore di mercato indicativo è stimabile in:\n\n`+
-    `   ${eur(Math.round(tot*0.92/1000)*1000)} — ${eur(Math.round(tot*1.08/1000)*1000)}\n\n`+
+    `Immobile: ${mq} mq superficie utile in zona ${z}${balc>0?`, balcone ${balc} mq`:''}${terr>0?`, terrazzo ${terr} mq`:''}.\n\n`+
+    `Sulla base dei valori OMI ufficiali per la zona (${base} €/mq) e delle caratteristiche `+
+    `dell'immobile (coefficiente di merito: ${f.toFixed(3)}), il valore di mercato indicativo è:\n\n`+
+    `   ${eur(Math.round(tot*.90/1000)*1000)} — ${eur(Math.round(tot*1.10/1000)*1000)}\n\n`+
     `con un valore mediano di riferimento di ${eur(tot)}.\n\n`+
-    `Si tratta di una stima di larga massima, non sostitutiva di una perizia. Un sopralluogo permetterà di precisare il valore in base allo stato reale, all'esposizione e alle finiture. Resto a disposizione per una valutazione puntuale gratuita e per illustrarLe il piano di vendita.`;
-  const el=document.getElementById('vl_text');el.style.display='block';el.textContent=t;
+    `Questa stima è calcolata con il metodo dei coefficienti di merito OMI (Agenzia delle Entrate) `+
+    `e ha valore puramente indicativo. Non sostituisce una perizia giurata.\n\n`+
+    `Per una valutazione puntuale gratuita e per conoscere il piano di vendita, resto a Sua completa disposizione.`;
+  const el=document.getElementById('vl_text'); el.style.display='block'; el.textContent=t;
 }
 
 /* ---------- AGENDA ---------- */
@@ -1172,18 +1471,19 @@ function vMappa3D(){
 
       if(vecSrc){
         try{
+          // OpenFreeMap usa 'render_height'; OMT standard usa 'height' — coalesce gestisce entrambi
+          const hExpr=['coalesce',['get','render_height'],['get','height'],5];
+          const bExpr=['coalesce',['get','render_min_height'],['get','min_height'],0];
           map3dObj.addLayer({
             id:'3d-buildings',source:vecSrc,'source-layer':'building',
-            type:'fill-extrusion',minzoom:14,
-            filter:['!=',['get','hide_3d'],true],
+            type:'fill-extrusion',minzoom:13,
             paint:{
-              'fill-extrusion-color':['interpolate',['linear'],['get','render_height'],
-                0,'#ede9e1',15,'#d9d3c7',40,'#c5bdb5'],
+              'fill-extrusion-color':['interpolate',['linear'],hExpr,
+                0,'#ede9e3',8,'#ddd8cf',20,'#cfc9c0',60,'#bfb9b0'],
               'fill-extrusion-height':['interpolate',['linear'],['zoom'],
-                14,0,15,['coalesce',['get','render_height'],4]],
-              'fill-extrusion-base':['case',['>=',['zoom'],15],
-                ['coalesce',['get','render_min_height'],0],0],
-              'fill-extrusion-opacity':0.82
+                13,0,14,0,15.5,hExpr],
+              'fill-extrusion-base':['case',['>=',['zoom'],15],bExpr,0],
+              'fill-extrusion-opacity':['interpolate',['linear'],['zoom'],14,0,15,.85]
             }
           },firstLabel);
         }catch(e){console.warn('[3D] edifici:',e.message);}

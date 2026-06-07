@@ -1121,7 +1121,7 @@ function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
   r.readAsText(f);}
 
 /* ---------- LOGIN / SESSIONE (versione Pro con server) ---------- */
-let APP_TOKEN = null; // token ricevuto al login, inviato a ogni chiamata (backup ai cookie)
+let APP_TOKEN = sessionStorage.getItem('cb_token') || null;
 function authHeaders(extra){
   const h = Object.assign({}, extra||{});
   if(APP_TOKEN) h['X-App-Token'] = APP_TOKEN;
@@ -1157,7 +1157,7 @@ async function doLogin(){
       body:JSON.stringify({username:user,password:pass})});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
-      if(d.token) APP_TOKEN=d.token;       // salvo il token per le chiamate successive
+      if(d.token){ APP_TOKEN=d.token; sessionStorage.setItem('cb_token',d.token); }
       document.getElementById('lg_pass').value='';
       showApp();
     }
@@ -1166,7 +1166,7 @@ async function doLogin(){
 }
 async function doLogout(){
   try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin',headers:authHeaders()}); }catch(e){}
-  APP_TOKEN=null;
+  APP_TOKEN=null; sessionStorage.removeItem('cb_token');
   showLogin();
 }
 

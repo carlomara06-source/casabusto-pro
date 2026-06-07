@@ -158,78 +158,48 @@ app.get("/api/me", (req, res) => {
   res.json({ authed: authedBySession || authedByToken, user: req.session?.user || null });
 });
 
-// =================== PROXY VERSO L'API OPENAPI ===================
-/**
- * L'app chiama QUESTO endpoint, non l'API direttamente.
- * Il server aggiunge la chiave e inoltra la richiesta. Così la chiave resta qui.
- *
- * Body atteso dall'app:
- *  {
- *    endpoint: "IT-sqm_value_advanced",   // quale endpoint OpenAPI usare
- *    method: "POST",                       // POST o GET
- *    payload: { ... }                      // i parametri (es. latitude, longitude, citta...)
- *  }
- */
-app.post("/api/openapi", requireLogin, async (req, res) => {
-  const { endpoint, method = "POST", payload = {} } = req.body || {};
-  if (!endpoint || !/^[A-Za-z0-9_\-]+$/.test(endpoint)) {
-    return res.status(400).json({ error: "endpoint non valido" });
-  }
-  if (!OPENAPI_KEY) {
-    return res.status(500).json({ error: "chiave API non configurata sul server" });
-  }
-  const url = `${OPENAPI_BASE}/${endpoint}`;
-  try {
-    const opts = {
-      method: method.toUpperCase() === "GET" ? "GET" : "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAPI_KEY}`,
-        "Content-Type": "application/json"
-      }
-    };
-    if (opts.method === "POST") opts.body = JSON.stringify(payload);
-    const apiRes = await fetch(url, opts);
-    const text = await apiRes.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    // Se OpenAPI rifiuta, restituisco 502 (non il codice originale) così il browser
-    // non confonde un errore API con un errore di sessione (che è sempre 401).
-    if (!apiRes.ok) {
-      return res.status(502).json({
-        error: "OpenAPI ha rifiutato la richiesta",
-        statusOpenAPI: apiRes.status,
-        endpointChiamato: endpoint,
-        urlChiamato: url,
-        rispostaOpenAPI: data
-      });
-    }
-    return res.status(apiRes.status).json(data);
-  } catch (e) {
-    return res.status(502).json({ error: "errore nel contattare l'API OpenAPI", detail: String(e) });
-  }
-});
+// =================== API OMI GRATUITA (3eurotools) ===================
+// Mappa quartieri app → zone OMI catastali di Busto Arsizio (codice B300)
+const ZONA_OMI_MAP = {
+  "Centro":               "B1",
+  "Tribunale":            "B1",
+  "Sant'Edoardo":         "C1",
+  "Sant'Anna":            "C1",
+  "Santissimi Apostoli":  "C1",
+  "San Michele":          "C2",
+  "Madonna Regina":       "C2",
+  "Redentore":            "D2",
+  "Beata Giuliana":       "D1",
+  "Borsano":              "D3",
+  "Sacconago":            "D4"
+};
 
-/**
- * Recupero risultato asincrono: alcune richieste OpenAPI restituiscono un id
- * e vanno poi lette con una GET su /{endpoint}/{id}. Questo endpoint lo fa per te.
- */
-app.post("/api/openapi-result", requireLogin, async (req, res) => {
-  const { endpoint, id } = req.body || {};
-  if (!endpoint || !/^[A-Za-z0-9_\-]+$/.test(endpoint) || !id || !/^[A-Za-z0-9_\-]+$/.test(id)) {
-    return res.status(400).json({ error: "parametri non validi" });
-  }
-  const url = `${OPENAPI_BASE}/${endpoint}/${id}`;
+// Recupera quotazioni OMI per tutte le zone di Busto Arsizio (gratuito, nessuna chiave)
+app.get("/api/omi", requireLogin, async (req, res) => {
   try {
-    const apiRes = await fetch(url, {
-      method: "GET",
-      headers: { "Authorization": `Bearer ${OPENAPI_KEY}` }
-    });
-    const text = await apiRes.text();
-    let data;
-    try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    return res.status(apiRes.status).json(data);
+    const url = "https://3eurotools.it/api-quotazioni-immobiliari-omi/ricerca?codice_comune=B300&operazione=acquisto&tipo_immobile=abitazioni_civili";
+    const apiRes = await fetch(url);
+    if (!apiRes.ok) {
+      return res.status(502).json({ error: "Errore nel recuperare i dati OMI", status: apiRes.status });
+    }
+    const zoneOMI = await apiRes.json();
+    // Costruisce la risposta: per ogni quartiere, prende il valore medio dalla zona OMI corrispondente
+    const risultati = {};
+    for (const [quartiere, zonaCode] of Object.entries(ZONA_OMI_MAP)) {
+      const zona = zoneOMI[zonaCode];
+      if (zona && zona.abitazioni_civili) {
+        risultati[quartiere] = {
+          zona_omi: zonaCode,
+          min: zona.abitazioni_civili.prezzo_acquisto_min,
+          max: zona.abitazioni_civili.prezzo_acquisto_max,
+          med: zona.abitazioni_civili.prezzo_acquisto_medio,
+          stato: zona.abitazioni_civili.stato_di_conservazione_mediano_della_zona
+        };
+      }
+    }
+    return res.json({ ok: true, data: risultati, fonte: "OMI - Agenzia delle Entrate" });
   } catch (e) {
-    return res.status(502).json({ error: "errore nel recuperare il risultato", detail: String(e) });
+    return res.status(502).json({ error: "Errore nel contattare l'API OMI", detail: String(e) });
   }
 });
 

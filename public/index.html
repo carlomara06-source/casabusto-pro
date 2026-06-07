@@ -839,13 +839,9 @@ function vStrum(){
     <button class="btn btn-g btn-sm" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('out').textContent);this.textContent='✓ Copiato'">Copia testo</button></div>
   </div>`;
 }
-/* ---------- PANNELLO AGGIORNAMENTO VIA API (OpenAPI.com) ---------- */
-/* ---------- AGGIORNAMENTO DATI VIA SERVER (versione Pro) ----------
-   In questa versione la chiave API è custodita dal server. L'app chiama
-   il server (/api/openapi), che aggiunge la chiave e interroga OpenAPI.
-   Niente più copia-incolla: i pulsanti aggiornano i dati direttamente. */
-
-const API_ENDPOINT = "IT-sqm_value_advanced"; // endpoint valori al mq
+/* ---------- AGGIORNAMENTO DATI VIA OMI GRATUITA ----------
+   Usa l'API gratuita dell'Agenzia delle Entrate (tramite 3eurotools).
+   Nessuna chiave, nessun credito: dati OMI ufficiali aggiornati semestralmente. */
 
 function vApiUpdate(){
   const stamps=DB.load('apiStamps',{});
@@ -854,15 +850,14 @@ function vApiUpdate(){
     const d=stamps[z.n];
     let badge='<span style="color:var(--muted);font-size:12px">mai aggiornato</span>';
     if(d){const giorni=Math.round((oggi-new Date(d))/86400000);
-      const col=giorni>30?'var(--terra)':'var(--ok)';
+      const col=giorni>180?'var(--terra)':'var(--ok)';
       badge=`<span style="color:${col};font-size:12px">${fmtD(d)} (${giorni}g fa)</span>`;}
-    return `<tr><td><b>${z.n}</b></td><td>${omi[z.n]} €/mq</td><td>${badge}</td>
-      <td style="text-align:right"><button class="btn btn-g btn-sm" onclick="aggiornaZona('${z.n.replace(/'/g,"\\'")}')">Aggiorna</button></td></tr>`;
+    return `<tr><td><b>${z.n}</b></td><td>${omi[z.n]} €/mq</td><td>${badge}</td></tr>`;
   }).join('');
   document.getElementById('view').innerHTML=`
-    <div class="card" style="margin-bottom:16px;border-color:var(--terra)">
-      <div class="sect-t"><span class="bar"></span>⚡ Aggiornamento automatico — chiave protetta sul server</div>
-      <p style="font-size:13.5px;line-height:1.6;color:var(--slate)">La tua chiave API è custodita dal server e non è mai visibile qui nel browser. Premi un pulsante e i dati si aggiornano da soli interrogando OpenAPI.</p>
+    <div class="card" style="margin-bottom:16px;border-color:var(--olive)">
+      <div class="sect-t"><span class="bar"></span>⟳ Aggiornamento dati OMI — Agenzia delle Entrate</div>
+      <p style="font-size:13.5px;line-height:1.6;color:var(--slate)">Dati ufficiali dell'Osservatorio del Mercato Immobiliare (OMI). Gratuiti, aggiornati semestralmente dall'Agenzia delle Entrate. Un click aggiorna tutti i quartieri.</p>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
         <button class="btn btn-p" id="btnAllZone" onclick="aggiornaTutte()">⟳ Aggiorna TUTTE le zone di Busto</button>
         <button class="btn btn-g" onclick="vApiUpdate()">Ricarica tabella</button>
@@ -871,81 +866,39 @@ function vApiUpdate(){
     </div>
     <div class="card">
       <div class="sect-t"><span class="bar"></span>Stato per zona</div>
-      <table><thead><tr><th>Zona</th><th>Valore attuale</th><th>Ultimo aggiornamento</th><th></th></tr></thead>
+      <table><thead><tr><th>Zona</th><th>Valore attuale</th><th>Ultimo aggiornamento</th></tr></thead>
       <tbody>${rows}</tbody></table>
-      <div class="note" style="margin-top:12px">In rosso le zone non aggiornate da oltre 30 giorni. Il piano gratuito consente fino a 1440 richieste/giorno: aggiorna pure quando vuoi.</div>
+      <div class="note" style="margin-top:12px">I dati OMI vengono aggiornati ogni semestre dall'Agenzia delle Entrate. Aggiorna quando vuoi: il servizio è completamente gratuito.</div>
     </div>`;
-}
-
-/* chiama il server per una singola zona; gestisce anche la risposta asincrona */
-async function fetchZona(zona){
-  const z=ZONE.find(x=>x.n===zona); if(!z) throw new Error('zona sconosciuta');
-  const payload={
-    address: `${zona}, Busto Arsizio, VA`,
-    for: "sale",
-    type: 1
-  };
-  const r=await fetch('/api/openapi',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
-    body:JSON.stringify({endpoint:API_ENDPOINT, method:'POST', payload})});
-  if(r.status===401){ throw new Error('sessione scaduta'); }
-  let data=await r.json();
-  // se il server segnala che OpenAPI ha rifiutato (502), mostro il motivo reale
-  if(data && data.statusOpenAPI){
-    const msg = (data.rispostaOpenAPI && (data.rispostaOpenAPI.message || data.rispostaOpenAPI.error)) || JSON.stringify(data.rispostaOpenAPI||{});
-    throw new Error(`OpenAPI ${data.statusOpenAPI}: ${msg}`);
-  }
-  // gestione asincrona: se torna un id e stato in_erogazione, faccio polling
-  let d=data.data||data;
-  let tries=0;
-  while((d && (d.stato==='in_erogazione' || (d.id && !(d.quotazione)))) && tries<6){
-    await new Promise(res=>setTimeout(res,2500));
-    const rr=await fetch('/api/openapi-result',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
-      body:JSON.stringify({endpoint:API_ENDPOINT, id:d.id})});
-    data=await rr.json(); d=data.data||data; tries++;
-  }
-  const q=d.quotazione||(d.data&&d.data.quotazione);
-  if(!q||q.med==null) throw new Error('quotazione non disponibile nella risposta');
-  return q;
-}
-
-async function aggiornaZona(zona){
-  const box=document.getElementById('api_global_result');
-  if(box) box.innerHTML=`<div class="note">Aggiorno ${zona}…</div>`;
-  try{
-    const q=await fetchZona(zona);
-    omi[zona]=Math.round(q.med); persist();
-    const stamps=DB.load('apiStamps',{}); stamps[zona]=new Date().toISOString().slice(0,10); DB.save('apiStamps',stamps);
-    vApiUpdate();
-    const b=document.getElementById('api_global_result');
-    if(b) b.innerHTML=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ ${zona} aggiornata: <b>${Math.round(q.med)} €/mq</b> (min ${Math.round(q.min)} – max ${Math.round(q.max)}).</div>`;
-  }catch(e){
-    const b=document.getElementById('api_global_result');
-    if(b) b.innerHTML=`<div class="note" style="border-color:var(--terra);color:var(--terra-d)">Errore su ${zona}: ${e.message}. ${e.message==='sessione scaduta'?'Rifai il login.':''}</div>`;
-  }
 }
 
 async function aggiornaTutte(){
   const btn=document.getElementById('btnAllZone');
   const box=document.getElementById('api_global_result');
   if(btn){ btn.disabled=true; btn.textContent='Aggiornamento in corso…'; }
-  let ok=0; const fail=[];
-  const stamps=DB.load('apiStamps',{}); const today=new Date().toISOString().slice(0,10);
-  for(const z of ZONE){
-    if(box) box.innerHTML=`<div class="note">Aggiorno ${z.n}… (${ok+fail.length+1}/${ZONE.length})</div>`;
-    try{
-      const q=await fetchZona(z.n);
-      omi[z.n]=Math.round(q.med); stamps[z.n]=today; ok++;
-      persist(); DB.save('apiStamps',stamps);
-    }catch(e){ fail.push(`${z.n} (${e.message})`); if(e.message==='sessione scaduta'){break;} }
-  }
-  persist(); DB.save('apiStamps',stamps);
-  if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
-  vApiUpdate();
-  const b=document.getElementById('api_global_result');
-  if(b){
-    let html=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ Aggiornate <b>${ok}</b> zone su ${ZONE.length}. Mappa, grafici e valutazioni ora usano i nuovi valori.</div>`;
-    if(fail.length) html+=`<div class="note" style="margin-top:8px;border-color:var(--warn);color:var(--warn)">Non aggiornate: ${fail.join('; ')}.</div>`;
-    b.innerHTML=html;
+  if(box) box.innerHTML=`<div class="note">Recupero dati OMI da Agenzia delle Entrate…</div>`;
+  try{
+    const r=await fetch('/api/omi',{credentials:'same-origin',headers:authHeaders()});
+    if(r.status===401){ throw new Error('sessione scaduta'); }
+    const resp=await r.json();
+    if(!resp.ok) throw new Error(resp.error||'errore API');
+    const today=new Date().toISOString().slice(0,10);
+    const stamps=DB.load('apiStamps',{});
+    let aggiornate=0;
+    for(const [quartiere, dati] of Object.entries(resp.data)){
+      omi[quartiere]=Math.round(dati.med);
+      stamps[quartiere]=today;
+      aggiornate++;
+    }
+    persist(); DB.save('apiStamps',stamps);
+    if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
+    vApiUpdate();
+    const b=document.getElementById('api_global_result');
+    if(b) b.innerHTML=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ Aggiornate <b>${aggiornate}</b> zone con dati OMI ufficiali. Fonte: ${resp.fonte}.</div>`;
+  }catch(e){
+    if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
+    const b=document.getElementById('api_global_result');
+    if(b) b.innerHTML=`<div class="note" style="border-color:var(--terra);color:var(--terra-d)">Errore: ${e.message}${e.message==='sessione scaduta'?' — rifai il login':''}</div>`;
   }
 }
 

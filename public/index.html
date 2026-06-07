@@ -889,10 +889,10 @@ async function fetchZona(zona){
   };
   const r=await fetch('/api/openapi',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
     body:JSON.stringify({endpoint:API_ENDPOINT, method:'POST', payload})});
-  if(r.status===401){ throw new Error('sessione scaduta — rifai il login'); }
+  if(r.status===401){ throw new Error('sessione scaduta'); }
   let data=await r.json();
-  // se il server segnala che OpenAPI ha rifiutato, mostro il motivo reale
-  if(data && data.error && data.statusOpenAPI){
+  // se il server segnala che OpenAPI ha rifiutato (502), mostro il motivo reale
+  if(data && data.statusOpenAPI){
     const msg = (data.rispostaOpenAPI && (data.rispostaOpenAPI.message || data.rispostaOpenAPI.error)) || JSON.stringify(data.rispostaOpenAPI||{});
     throw new Error(`OpenAPI ${data.statusOpenAPI}: ${msg}`);
   }

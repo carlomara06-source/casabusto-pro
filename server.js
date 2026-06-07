@@ -192,9 +192,10 @@ app.post("/api/openapi", requireLogin, async (req, res) => {
     const text = await apiRes.text();
     let data;
     try { data = JSON.parse(text); } catch { data = { raw: text }; }
-    // Se OpenAPI rifiuta, inoltro un messaggio leggibile (utile per capire i parametri attesi)
+    // Se OpenAPI rifiuta, restituisco 502 (non il codice originale) così il browser
+    // non confonde un errore API con un errore di sessione (che è sempre 401).
     if (!apiRes.ok) {
-      return res.status(apiRes.status).json({
+      return res.status(502).json({
         error: "OpenAPI ha rifiutato la richiesta",
         statusOpenAPI: apiRes.status,
         endpointChiamato: endpoint,

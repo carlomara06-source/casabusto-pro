@@ -877,8 +877,9 @@ const PORTALI_CFG=[
 let _portaleCur='immobiliare';
 function renderPortaliFinestre(){
   document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:16px">
-      🖥 I portali si aprono direttamente qui sotto attraverso il server CasaBusto. Se un sito non si carica clicca <b>Apri nel browser</b>.
+    <div style="background:linear-gradient(135deg,#f0f4ff,#fff);border:1px solid #d0d8f0;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;line-height:1.6;color:#2a3a5a">
+      🖥 <b>Finestre portali</b> — il server CasaBusto recupera le pagine bypassando i blocchi iframe.<br>
+      <span style="color:#5a6a8a">Se il sito usa Cloudflare potrebbero non caricarsi: imposta <code style="background:#e8edf8;padding:1px 5px;border-radius:4px;font-size:11.5px">SCRAPERAPI_KEY</code> su Render per il bypass automatico (account gratuito → <a href="https://www.scraperapi.com/" target="_blank" style="color:#3a5aa0">scraperapi.com</a>).</span>
     </div>
     <div class="tool-tabs" style="margin-bottom:14px">
       ${PORTALI_CFG.map(p=>`
@@ -886,13 +887,13 @@ function renderPortaliFinestre(){
           onclick="switchPortale('${p.id}')" style="${p.id===_portaleCur?`border-bottom:2.5px solid ${p.color}`:''}"
         >${p.icon} ${p.nome}</button>`).join('')}
     </div>
-    <div id="portaleWrap" class="portal-frame-wrap">
-      <div id="portaleLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--paper);z-index:2">
-        <div style="font-size:32px">⏳</div>
-        <div style="font-weight:600">Caricamento portale…</div>
-        <div style="font-size:12.5px;color:var(--muted)">Connessione al portale in corso</div>
+    <div id="portaleWrap" class="portal-frame-wrap" style="min-height:700px">
+      <div id="portaleLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--paper);z-index:2">
+        <div style="font-size:30px">⏳</div>
+        <div style="font-weight:600;font-size:14px">Caricamento portale…</div>
+        <div style="font-size:12px;color:var(--muted)">Il proxy server sta recuperando la pagina</div>
       </div>
-      <iframe id="portaleFrame" style="width:100%;height:680px;border:none;display:block"
+      <iframe id="portaleFrame" style="width:100%;height:700px;border:none;display:block"
         onload="portaleLoaded()" onerror="portaleError()"></iframe>
     </div>
     <div id="portaleActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
@@ -900,7 +901,6 @@ function renderPortaliFinestre(){
 }
 function switchPortale(id){
   _portaleCur=id;
-  // Aggiorna tab buttons
   PORTALI_CFG.forEach(p=>{
     const b=document.getElementById('ptab_'+p.id);
     if(b){
@@ -917,24 +917,40 @@ function loadPortale(id){
   const loading=document.getElementById('portaleLoading');
   const actions=document.getElementById('portaleActions');
   if(!frame)return;
-  if(loading){loading.style.display='flex';loading.innerHTML=`<div style="font-size:32px">${p.icon}</div><div style="font-weight:600">Caricamento ${p.nome}…</div><div style="font-size:12.5px;color:var(--muted)">Connessione in corso</div>`;}
+  if(loading){
+    loading.style.display='flex';
+    loading.innerHTML=`
+      <div style="font-size:30px;margin-bottom:4px">${p.icon}</div>
+      <div style="font-weight:600;font-size:14px">Caricamento ${p.nome}…</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Proxy in corso — potrebbe richiedere fino a 30 secondi</div>
+      <a href="${p.url}" target="_blank" style="margin-top:16px;font-size:12.5px;color:var(--terra);font-weight:600;text-decoration:none">↗ Apri direttamente nel browser</a>`;
+  }
   frame.src='/api/frame?url='+encodeURIComponent(p.url)+'&t='+Date.now();
-  if(actions) actions.innerHTML=`<a href="${p.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${p.nome} nel browser ↗</a>
-    <span style="font-size:12px;color:var(--muted)">Naviga nel portale — i link si aprono in nuova scheda</span>`;
-  // Timeout: se non carica in 12 sec mostra errore
+  if(actions) actions.innerHTML=`
+    <a href="${p.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">↗ Apri ${p.nome} nel browser</a>
+    <button class="btn btn-g btn-sm" onclick="loadPortale('${p.id}')">↺ Ricarica</button>
+    <span style="font-size:12px;color:var(--muted);flex:1">I link all'interno si aprono in nuova scheda</span>`;
+  // Timeout più lungo (ScraperAPI può impiegare 30s)
   clearTimeout(window._portaleTimer);
   window._portaleTimer=setTimeout(()=>{
     if(loading&&loading.style.display!=='none'){
-      loading.innerHTML=`<div style="font-size:40px">🔒</div>
-        <div style="font-weight:600;margin-top:10px">Sito non accessibile in anteprima</div>
-        <div style="font-size:12.5px;color:var(--muted);max-width:360px;line-height:1.5;text-align:center;margin-top:6px">${p.nome} blocca l'accesso diretto. Usa il link qui sotto.</div>
-        <a href="${p.url}" target="_blank" class="btn btn-p btn-sm" style="margin-top:14px;text-decoration:none">Apri ${p.nome} ↗</a>`;
+      loading.innerHTML=`
+        <div style="font-size:36px;margin-bottom:10px">⏱</div>
+        <div style="font-weight:600;font-size:14px;margin-bottom:8px">Risposta lenta dal server proxy</div>
+        <div style="font-size:12.5px;color:var(--muted);max-width:380px;line-height:1.6;text-align:center;margin-bottom:16px">
+          ${p.nome} sta impiegando più del previsto. Il proxy continua in background.<br>
+          <span style="color:var(--terra);font-size:12px">Se non si carica entro qualche secondo, usa il link diretto.</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+          <a href="${p.url}" target="_blank" class="btn btn-p btn-sm" style="text-decoration:none">↗ Apri ${p.nome}</a>
+          <button class="btn btn-g btn-sm" onclick="loadPortale('${p.id}')">↺ Riprova</button>
+        </div>`;
     }
-  },12000);
+  },22000);
 }
 function portaleLoaded(){
   const loading=document.getElementById('portaleLoading');
-  if(loading)loading.style.display='none';
+  if(loading){loading.style.display='none';}
   clearTimeout(window._portaleTimer);
 }
 function portaleError(){portaleLoaded();}
@@ -1574,124 +1590,210 @@ function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
 let map3dObj=null, map3dReady=false;
 function vMappa3D(){
   document.getElementById('topAct').innerHTML=`
-    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:8px;padding:5px 11px;backdrop-filter:blur(6px)">
         <input type="checkbox" id="togCatasto" onchange="toggleCatastoLayer(this.checked)"> Catasto
       </label>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:60,bearing:-20,zoom:15,duration:800})">Vista 3D</button>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:0,bearing:0,zoom:14,duration:800})">Vista piano</button>
+      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:58,bearing:-18,zoom:15.5,duration:900})">🏙 3D zoom</button>
+      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:0,bearing:0,zoom:13.5,duration:800})">🗺 Piano</button>
+      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.flyTo({center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,duration:1400})">⌂ Centro</button>
     </div>`;
+  // Inietta CSS spinner una sola volta
+  if(!document.getElementById('_m3dCss')){
+    const _s=document.createElement('style');_s.id='_m3dCss';
+    _s.textContent=`@keyframes _m3dspin{to{transform:rotate(360deg)}} .m3d-spin{width:36px;height:36px;border:3px solid rgba(255,255,255,.12);border-top-color:#e07848;border-radius:50%;animation:_m3dspin .75s linear infinite}`;
+    document.head.appendChild(_s);
+  }
   document.getElementById('view').innerHTML=`
-    <div id="map3d" style="height:580px;border-radius:var(--r);border:1px solid var(--line);overflow:hidden;position:relative">
-      <div id="map3dLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--paper);z-index:10;font-size:14px;color:var(--muted)">Caricamento mappa 3D…</div>
+    <div style="position:relative;height:calc(100vh - 145px);border-radius:var(--r);border:1px solid var(--line);overflow:hidden;background:#e9e4dc">
+      <div id="map3dLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(135deg,#0f1a26,#1b3048);z-index:8;transition:opacity .55s ease;pointer-events:none">
+        <div class="m3d-spin"></div>
+        <div style="color:#b8b0a8;font-size:14px;letter-spacing:.03em">Caricamento mappa 3D…</div>
+        <div style="color:#49596a;font-size:12px">Busto Arsizio · MapLibre GL JS</div>
+      </div>
+      <div id="map3d" style="width:100%;height:100%;position:absolute;inset:0"></div>
     </div>
-    <div class="grid g3" style="margin-top:14px">
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>Legenda</div>
-        <div style="font-size:13px;line-height:2.4">
-          <span style="display:inline-block;width:12px;height:12px;background:var(--olive);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>Acquisito<br>
-          <span style="display:inline-block;width:12px;height:12px;background:var(--slate);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>In mandato<br>
-          <span style="display:inline-block;width:12px;height:12px;background:var(--warn);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>In trattativa<br>
-          <span style="display:inline-block;width:12px;height:12px;background:var(--terra);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>Zona OMI (€/mq)
-        </div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Immobili</div>
+        <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:600;margin-top:4px">${immobili.length}</div>
       </div>
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>Controlli</div>
-        <div style="font-size:13px;line-height:2.2;color:var(--slate)">
-          <b>Trascina</b> per spostarti<br>
-          <b>Ctrl + trascina</b> per ruotare<br>
-          <b>Scroll</b> per zoom<br>
-          <b>Catasto</b> mostra i confini catastali ufficiali
-        </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">In mandato</div>
+        <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:600;color:var(--terra);margin-top:4px">${immobili.filter(i=>i.stato==='mandato').length}</div>
       </div>
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>Portfolio</div>
-        <div style="font-size:14px;line-height:2.2">
-          <b>${immobili.length}</b> <span style="color:var(--muted)">immobili totali</span><br>
-          <b>${immobili.filter(i=>i.stato==='mandato').length}</b> <span style="color:var(--muted)">in mandato</span><br>
-          <b>${leads.filter(l=>l.fase!=='mandato').length}</b> <span style="color:var(--muted)">lead attivi</span><br>
-          <b>${ZONE.length}</b> <span style="color:var(--muted)">zone monitorate</span>
-        </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Lead attivi</div>
+        <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:600;color:var(--gold);margin-top:4px">${leads.filter(l=>l.fase!=='mandato').length}</div>
       </div>
+      <div class="card" style="padding:14px;text-align:center">
+        <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Zone OMI</div>
+        <div style="font-family:'Fraunces',serif;font-size:28px;font-weight:600;color:var(--olive);margin-top:4px">${ZONE.length}</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;align-items:center">
+      <div style="display:flex;gap:8px;align-items:center;font-size:12px">
+        <span style="display:inline-flex;width:10px;height:10px;background:var(--olive);border-radius:50%"></span><span style="color:var(--muted)">Acquisito</span>
+        <span style="display:inline-flex;width:10px;height:10px;background:#c0572b;border-radius:50%"></span><span style="color:var(--muted)">Mandato</span>
+        <span style="display:inline-flex;width:10px;height:10px;background:var(--warn);border-radius:50%"></span><span style="color:var(--muted)">Trattativa</span>
+        <span style="display:inline-flex;width:10px;height:10px;background:#e07848;border-radius:50%;margin-left:8px"></span><span style="color:var(--muted)">Zona OMI</span>
+      </div>
+      <span style="flex:1"></span>
+      <span style="font-size:11.5px;color:var(--muted)">Trascina · Scroll zoom · Ctrl+trascina ruota</span>
     </div>`;
-  setTimeout(()=>{
-    if(map3dObj){map3dObj.remove();map3dObj=null;map3dReady=false;}
-    map3dObj=new maplibregl.Map({
-      container:'map3d',
-      style:'https://tiles.openfreemap.org/styles/bright',
-      center:[8.851,45.611],zoom:14,pitch:45,bearing:-17,antialias:true
-    });
-    map3dObj.addControl(new maplibregl.NavigationControl(),'top-right');
-    map3dObj.on('load',()=>{
+  _init3D();
+}
+function _init3D(){
+  const container=document.getElementById('map3d');
+  if(!container)return;
+
+  // Se la mappa esiste già, prova a riutilizzarla
+  if(map3dObj){
+    try{
+      const canvas=map3dObj.getCanvas();
+      if(canvas && document.body.contains(canvas)){
+        // Canvas ancora nel DOM → resize e nascondi spinner
+        map3dObj.resize();
+        const ldr=document.getElementById('map3dLoading');
+        if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+        return;
+      }
+    }catch(e){}
+    // Canvas staccato → rimuovi e ricrea
+    try{map3dObj.remove();}catch(e){}
+    map3dObj=null;map3dReady=false;
+  }
+
+  // Crea la mappa (requestAnimationFrame garantisce che il DOM sia pronto)
+  requestAnimationFrame(()=>{
+    if(!document.getElementById('map3d'))return; // utente ha navigato via
+    try{
+      map3dObj=new maplibregl.Map({
+        container:'map3d',
+        style:'https://tiles.openfreemap.org/styles/bright',
+        center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,antialias:true,
+        maxZoom:19,minZoom:10
+      });
+    }catch(e){
+      console.error('[3D] init error:',e);
       const ldr=document.getElementById('map3dLoading');
-      if(ldr)ldr.style.display='none';
+      if(ldr){ldr.innerHTML=`<div style="color:#c88;text-align:center;padding:24px;font-size:14px">⚠️ Errore mappa:<br>${e.message}</div>`;ldr.style.pointerEvents='all';}
+      return;
+    }
+
+    map3dObj.addControl(new maplibregl.NavigationControl({showCompass:true}),'top-right');
+    map3dObj.addControl(new maplibregl.ScaleControl({maxWidth:100,unit:'metric'}),'bottom-left');
+
+    map3dObj.on('error',e=>console.warn('[MapLibre]',e.error?.message||e));
+
+    // Timeout di sicurezza: 20 s
+    const _t3d=setTimeout(()=>{
+      if(!map3dReady){
+        const ldr=document.getElementById('map3dLoading');
+        if(ldr){
+          ldr.style.background='linear-gradient(135deg,#1a0e0e,#2d1515)';
+          ldr.style.pointerEvents='all';
+          ldr.innerHTML=`<div style="text-align:center;padding:24px">
+            <div style="font-size:30px;margin-bottom:10px">⚠️</div>
+            <div style="color:#e0b0a0;font-size:14px;font-weight:600">Timeout caricamento mappa</div>
+            <div style="color:#8a7070;font-size:12.5px;margin-top:8px;line-height:1.5">Controlla la connessione internet</div>
+            <button onclick="try{map3dObj.remove();}catch(e){} map3dObj=null;map3dReady=false;render();" style="margin-top:16px;background:#c0572b;color:#fff;border:none;padding:9px 20px;border-radius:8px;cursor:pointer;font-size:13px">↺ Riprova</button>
+          </div>`;
+        }
+      }
+    },20000);
+
+    map3dObj.on('load',()=>{
+      clearTimeout(_t3d);
       map3dReady=true;
 
-      // Rileva source vettoriale dinamicamente (OpenFreeMap usa 'openmaptiles')
-      const sources=map3dObj.getStyle().sources;
+      // Nascondi spinner con fade
+      const ldr=document.getElementById('map3dLoading');
+      if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+
+      // --- Rileva source vettoriale ---
+      const styleDef=map3dObj.getStyle();
+      const sources=styleDef.sources||{};
       let vecSrc=null;
       for(const[id,s]of Object.entries(sources)){if(s.type==='vector'){vecSrc=id;break;}}
+      const firstLabel=styleDef.layers?.find(l=>l.type==='symbol'&&(l.layout?.['text-field']||l.layout?.['icon-image']))?.id;
+      console.log('[3D] vecSrc:',vecSrc,'| firstLabel:',firstLabel,'| sources:',Object.keys(sources));
 
-      // Primo layer symbol (etichette) → inserisce edifici sotto le label
-      const firstLabel=map3dObj.getStyle().layers.find(l=>l.type==='symbol'&&l.layout?.['text-field'])?.id;
-
+      // --- Edifici 3D ---
       if(vecSrc){
         try{
-          // OpenFreeMap usa 'render_height'; OMT standard usa 'height' — coalesce gestisce entrambi
-          const hExpr=['coalesce',['get','render_height'],['get','height'],5];
+          // FIX CRITICO: NON usare interpolazione zoom sull'altezza → edifici invisibili a zoom 14
+          // Invece: altezza piena subito, fade-in con opacità (visibili da zoom 13)
+          const hExpr=['coalesce',['get','render_height'],['get','height'],8];
           const bExpr=['coalesce',['get','render_min_height'],['get','min_height'],0];
+          if(map3dObj.getLayer('3d-buildings'))map3dObj.removeLayer('3d-buildings');
           map3dObj.addLayer({
             id:'3d-buildings',source:vecSrc,'source-layer':'building',
-            type:'fill-extrusion',minzoom:13,
+            type:'fill-extrusion',minzoom:12,
             paint:{
-              'fill-extrusion-color':['interpolate',['linear'],hExpr,
-                0,'#ede9e3',8,'#ddd8cf',20,'#cfc9c0',60,'#bfb9b0'],
-              'fill-extrusion-height':['interpolate',['linear'],['zoom'],
-                13,0,14,0,15.5,hExpr],
-              'fill-extrusion-base':['case',['>=',['zoom'],15],bExpr,0],
-              'fill-extrusion-opacity':['interpolate',['linear'],['zoom'],14,0,15,.85]
+              'fill-extrusion-color':['interpolate',['linear'],
+                ['coalesce',['get','render_height'],['get','height'],3],
+                0,'#eeead4',5,'#e4dfd0',10,'#d8d3ca',20,'#cbc6bc',40,'#bcb8b0'],
+              // ALTEZZA: diretta, senza zoom-interpolation (era il bug principale)
+              'fill-extrusion-height': hExpr,
+              'fill-extrusion-base': bExpr,
+              // OPACITÀ: fade-in tra zoom 12 e 13.5 → pienamente visibili a zoom 14
+              'fill-extrusion-opacity':['interpolate',['linear'],['zoom'],12,0,13.5,0.88]
             }
           },firstLabel);
+          console.log('[3D] layer edifici aggiunto correttamente');
         }catch(e){console.warn('[3D] edifici:',e.message);}
+      }else{
+        console.warn('[3D] Nessuna source vettoriale trovata');
       }
 
-      // Catasto WMS via proxy (evita CORS)
-      map3dObj.addSource('catasto',{type:'raster',
-        tiles:['/api/catasto-tile?bbox={bbox-epsg-3857}'],
-        tileSize:256,attribution:'© Agenzia delle Entrate — CC-BY 4.0'});
-      map3dObj.addLayer({id:'catasto-layer',type:'raster',source:'catasto',
-        paint:{'raster-opacity':0.6},layout:{visibility:'none'}});
+      // --- Catasto WMS ---
+      try{
+        if(!map3dObj.getSource('catasto')){
+          map3dObj.addSource('catasto',{type:'raster',
+            tiles:['/api/catasto-tile?bbox={bbox-epsg-3857}'],
+            tileSize:256,attribution:'© Agenzia delle Entrate CC-BY 4.0'});
+          map3dObj.addLayer({id:'catasto-layer',type:'raster',source:'catasto',
+            paint:{'raster-opacity':0.55},layout:{visibility:'none'}});
+        }
+      }catch(e){console.warn('[catasto]',e.message);}
 
-      // Marker zone OMI
+      // --- Marker zone OMI ---
       ZONE.forEach(z=>{
         const v=omi[z.n]||1500;
-        const col=v>1900?'#bf5628':v>1650?'#b5820a':'#4d6844';
+        const col=v>1900?'#bf5628':v>1700?'#b5820a':'#4d6844';
         const el=document.createElement('div');
-        el.innerHTML=`<div style="background:${col};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer">${v} €</div>`;
+        el.innerHTML=`<div style="background:${col};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.32);cursor:pointer;border:1.5px solid rgba(255,255,255,.18)">${v}€</div>`;
         new maplibregl.Marker({element:el,anchor:'bottom'})
           .setLngLat([z.lng,z.lat])
-          .setPopup(new maplibregl.Popup({offset:26,maxWidth:'200px'})
-            .setHTML(`<b style="font-family:serif;font-size:14px">${z.n}</b><br><span style="font-size:12px">Valore: <b>${v} €/mq</b></span>`))
+          .setPopup(new maplibregl.Popup({offset:28,maxWidth:'200px'})
+            .setHTML(`<b style="font-family:'Fraunces',serif;font-size:14px">${z.n}</b><br><span style="font-size:12px;color:#666">OMI: <b>${v} €/mq</b></span>`))
           .addTo(map3dObj);
       });
 
-      // Marker immobili in portafoglio
-      const colMap={acq:'#4d6844',mandato:'#3b5068',tratt:'#b5820a',vend:'#3b7347'};
+      // --- Marker immobili in portafoglio ---
+      const colMap={acq:'#4d6844',mandato:'#c0572b',tratt:'#b5820a',vend:'#3b7347'};
+      const statoLabel={acq:'Acquisito',mandato:'In mandato',tratt:'In trattativa',vend:'Venduto'};
       immobili.forEach(imm=>{
         const z=zoneOf(imm.zona);
         const jit=()=>(Math.random()-.5)*0.004;
         const el=document.createElement('div');
-        el.style.cssText=`width:14px;height:14px;border-radius:50%;background:${colMap[imm.stato]||'#888'};border:2.5px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4)`;
+        el.style.cssText=`width:13px;height:13px;border-radius:50%;background:${colMap[imm.stato]||'#888'};border:2.5px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.45);transition:transform .15s`;
+        el.onmouseenter=()=>el.style.transform='scale(1.4)';
+        el.onmouseleave=()=>el.style.transform='scale(1)';
         new maplibregl.Marker({element:el})
           .setLngLat([z.lng+jit(),z.lat+jit()])
-          .setPopup(new maplibregl.Popup({offset:14,maxWidth:'220px'})
-            .setHTML(`<b>${imm.tipo}</b> · ${imm.zona}<br>${imm.ind?`<span style="color:#888">${imm.ind}</span><br>`:''}
-              <b style="font-size:13px">${eur(imm.prezzo)}</b> · ${imm.mq} mq`))
+          .setPopup(new maplibregl.Popup({offset:14,maxWidth:'230px'})
+            .setHTML(`<div style="font-family:system-ui,sans-serif;font-size:13px;padding:2px">
+              <b>${imm.tipo}</b> · <span style="color:#888">${imm.zona}</span>
+              ${imm.ind?`<div style="color:#aaa;font-size:11px;margin-top:1px">${imm.ind}</div>`:''}
+              <div style="margin-top:5px"><b style="font-size:15px;color:#c0572b">${eur(imm.prezzo)}</b> · <span style="color:#666">${imm.mq} mq</span></div>
+              <div style="font-size:11px;color:#999;margin-top:2px">${statoLabel[imm.stato]||imm.stato}</div>
+            </div>`))
           .addTo(map3dObj);
       });
     });
-    map3dObj.on('error',e=>console.warn('[MapLibre]',e.error?.message||e));
-  },80);
+  });
 }
 function toggleCatastoLayer(show){
   if(!map3dObj||!map3dReady)return;

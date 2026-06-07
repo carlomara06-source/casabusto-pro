@@ -16,6 +16,7 @@ const APP_PASSWORD_HASH = process.env.APP_PASSWORD_HASH || "";
 const APP_USERNAME     = process.env.APP_USERNAME || "admin";
 const SESSION_SECRET   = process.env.SESSION_SECRET || "cambia-questo-segreto";
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || "";
+const SCRAPERAPI_KEY    = process.env.SCRAPERAPI_KEY || "";
 
 if (!APP_PASSWORD_HASH) console.warn("\n⚠️  APP_PASSWORD_HASH non impostata nel .env\n");
 
@@ -114,8 +115,26 @@ app.get("/api/catasto-tile", requireLogin, async (req,res)=>{
   }catch{res.status(502).end();}
 });
 
-// =================== FRAME PROXY (strip X-Frame-Options) ===================
-const FRAME_ALLOWED = ['immobiliare.it','idealista.it','casa.it','wikicasa.it','tecnoborsa.it','agenziaentrate.gov.it','borsino'];
+// =================== FRAME PROXY (strip X-Frame-Options + anti-bot headers) ===================
+const FRAME_ALLOWED = ['immobiliare.it','idealista.it','casa.it','wikicasa.it','tecnoborsa.it','agenziaentrate.gov.it','borsino','immobiliare24.it'];
+
+// Headers completi di Chrome 124 su macOS — bypassano bot-detection base
+const CHROME_HEADERS = {
+  "User-Agent":              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+  "Accept":                  "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+  "Accept-Language":         "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Cache-Control":           "max-age=0",
+  "Sec-Ch-Ua":               '"Google Chrome";v="124", "Chromium";v="124", "Not-A.Brand";v="99"',
+  "Sec-Ch-Ua-Mobile":        "?0",
+  "Sec-Ch-Ua-Platform":      '"macOS"',
+  "Sec-Fetch-Dest":          "document",
+  "Sec-Fetch-Mode":          "navigate",
+  "Sec-Fetch-Site":          "none",
+  "Sec-Fetch-User":          "?1",
+  "Upgrade-Insecure-Requests":"1",
+  "Dnt":                     "1",
+  "Referer":                 "https://www.google.it/"
+};
 
 app.get("/api/frame", requireLogin, async (req,res)=>{
   const url=req.query.url;
@@ -124,41 +143,94 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
   try{ urlObj=new URL(url); }catch{ return res.status(400).send("URL non valido"); }
   if(!FRAME_ALLOWED.some(d=>urlObj.hostname.includes(d)))
     return res.status(403).send("Dominio non consentito");
+
+  // --- Scegli fetch strategy ---
+  // Con ScraperAPI (SCRAPERAPI_KEY impostato): esegue JS → bypassa Cloudflare
+  // Senza: fetch diretto con header Chrome → bypassa protezioni base
+  let fetchUrl = url;
+  let fetchHeaders = CHROME_HEADERS;
+
+  if(SCRAPERAPI_KEY){
+    // ScraperAPI: render=true esegue JavaScript (bypassa Cloudflare JS challenge)
+    fetchUrl = `https://api.scraperapi.com/?api_key=${SCRAPERAPI_KEY}&url=${encodeURIComponent(url)}&render=true&country_code=it`;
+    fetchHeaders = {};
+    console.log(`[frame] ScraperAPI → ${urlObj.hostname}`);
+  }else{
+    console.log(`[frame] fetch diretto → ${urlObj.hostname}`);
+  }
+
   try{
-    const r=await fetch(url,{
-      headers:{
-        "User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept":"text/html,application/xhtml+xml,*/*",
-        "Accept-Language":"it-IT,it;q=0.9",
-        "Referer":"https://www.google.com/"
-      },
-      signal:AbortSignal.timeout(15000)
+    const r=await fetch(fetchUrl,{
+      headers:fetchHeaders,
+      redirect:"follow",
+      signal:AbortSignal.timeout(SCRAPERAPI_KEY?35000:18000)
     });
+
+    if(!r.ok && r.status===403){
+      throw new Error(`Cloudflare/bot-detection blocca la richiesta (HTTP 403). ${SCRAPERAPI_KEY?'':'Configura SCRAPERAPI_KEY nel .env per bypassarlo.'}`);
+    }
+
     let html=await r.text();
-    // Rewrite asset URLs to absolute + inject helpers
+
+    // Controlla se la risposta è una Cloudflare challenge (HTML molto corto + "Just a moment")
+    if(html.length<6000 && (html.includes("Just a moment")|| html.includes("cf-browser-verification")||html.includes("challenge-platform"))){
+      throw new Error(`Cloudflare ha bloccato la richiesta con una challenge JS. ${SCRAPERAPI_KEY?'ScraperAPI dovrebbe bypassarla — riprova tra qualche secondo.':'Configura SCRAPERAPI_KEY=... nel .env per bypassarlo automaticamente.'}`);
+    }
+
+    // Inject <base> e helpers
     const origin=urlObj.origin;
-    const base=`<base href="${origin}/">`;
-    const helpers=`<script>
-      // Open all links in new tab, intercept clicks
-      document.addEventListener('DOMContentLoaded',function(){
-        document.querySelectorAll('a').forEach(function(a){
-          if(!a.target)a.target='_blank';
-          if(!a.rel)a.rel='noopener noreferrer';
-        });
-      });
+    const inject=`<base href="${origin}/"><script>
+      (function(){
+        function fixLinks(){
+          document.querySelectorAll('a[href]').forEach(function(a){
+            if(!a.target)a.target='_blank';
+            if(!a.rel)a.rel='noopener noreferrer';
+          });
+        }
+        if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',fixLinks);
+        else fixLinks();
+        // Ri-applica ai link aggiunti dinamicamente
+        new MutationObserver(fixLinks).observe(document.body||document.documentElement,{childList:true,subtree:true});
+      })();
     </script>`;
-    html=html.replace(/<head([^>]*)>/i,`<head$1>${base}${helpers}`);
-    // Don't forward X-Frame-Options or CSP frame-ancestors (that's the whole point)
+    html=html.replace(/<head([^>]*)>/i,`<head$1>${inject}`);
+
     const ct=r.headers.get("content-type")||"text/html; charset=utf-8";
-    res.set("Content-Type",ct).send(html);
+    // Non inoltriamo X-Frame-Options né CSP (quello è il punto del proxy)
+    res.set("Content-Type",ct).set("X-Robots-Tag","noindex").send(html);
+
   }catch(e){
-    const msg=e.name==="TimeoutError"?"Timeout — il sito non risponde":e.message;
-    res.status(502).send(`<!DOCTYPE html><html><head><meta charset="utf-8"><base href="${url}"><style>body{font-family:system-ui,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f4f2ed;color:#0f1a26;text-align:center;padding:30px}</style></head><body>
-      <div style="font-size:48px;margin-bottom:16px">🔒</div>
-      <h2 style="margin:0 0 10px;font-size:22px">Sito non accessibile in anteprima</h2>
-      <p style="color:#8a8580;font-size:15px;max-width:400px;line-height:1.6">Questo portale blocca l'accesso diretto (${msg}). Usa il link qui sotto per aprirlo nel browser.</p>
-      <a href="${url}" target="_blank" style="margin-top:20px;background:#c0572b;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:700">Apri ${urlObj.hostname} ↗</a>
-    </body></html>`);
+    const msg=e.name==="TimeoutError"?"Timeout — il sito non risponde in tempo":e.message;
+    const hasKey=!!SCRAPERAPI_KEY;
+    res.status(502).send(`<!DOCTYPE html><html lang="it"><head><meta charset="utf-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:system-ui,-apple-system,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#f4f2ed;color:#0f1a26;text-align:center;padding:32px}
+  h2{font-size:20px;font-weight:700;margin-bottom:10px}
+  p{color:#70706a;font-size:14px;max-width:420px;line-height:1.65;margin-bottom:20px}
+  .btn{display:inline-block;padding:11px 22px;border-radius:10px;text-decoration:none;font-weight:700;font-size:14px;margin:4px}
+  .btn-r{background:#c0572b;color:#fff}
+  .btn-g{background:#fff;color:#333;border:1.5px solid #ddd}
+  .err{background:#fff3f0;border:1px solid #f0c8b8;border-radius:10px;padding:14px 18px;font-size:12.5px;color:#8a4030;max-width:440px;text-align:left;margin-bottom:20px;line-height:1.5}
+  .tip{background:#f0f4ff;border:1px solid #b8c8f0;border-radius:10px;padding:14px 18px;font-size:12px;color:#2a3a5a;max-width:440px;text-align:left;line-height:1.6;margin-bottom:20px}
+  code{background:#e8e4e0;padding:2px 6px;border-radius:4px;font-family:monospace}
+</style>
+</head><body>
+  <div style="font-size:44px;margin-bottom:14px">🔒</div>
+  <h2>${urlObj.hostname} non accessibile in anteprima</h2>
+  <div class="err">${msg}</div>
+  ${!hasKey?`<div class="tip">
+    <b>💡 Per bypassare il blocco:</b><br>
+    1. Crea account gratuito su <b>scraperapi.com</b> (5.000 req/mese gratis)<br>
+    2. Copia la tua API key<br>
+    3. Aggiungila su Render: variabile <code>SCRAPERAPI_KEY</code> = la tua chiave<br>
+    4. Riavvia il deploy — i portali si caricheranno automaticamente
+  </div>`:''}
+  <div>
+    <a href="${url}" target="_blank" class="btn btn-r">Apri ${urlObj.hostname} ↗</a>
+    <a href="javascript:history.back()" class="btn btn-g">← Torna</a>
+  </div>
+</body></html>`);
   }
 });
 

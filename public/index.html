@@ -9,118 +9,164 @@
 <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet"/>
 <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700;800&display=swap');
 
 :root{
-  --ink:#1a1814; --paper:#f4f1ea; --card:#fbfaf6; --line:#e0dace;
-  --terra:#b5562f; --terra-d:#8f3f20; --olive:#5f6b3c; --gold:#c79a3e;
-  --slate:#3a4a52; --muted:#8a8275; --ok:#4a7c4e; --warn:#c08a2e;
-  --shadow:0 1px 2px rgba(26,24,20,.06),0 8px 24px rgba(26,24,20,.08);
+  --ink:#0f1a26; --ink-2:#1c2e40; --paper:#f4f2ed; --card:#ffffff; --line:#e6e1d8; --line-2:#d2ccc2;
+  --terra:#c0572b; --terra-d:#9a4120; --terra-l:#fdf1eb;
+  --olive:#4d6844; --olive-l:#ecf2ea;
+  --gold:#b6820b; --gold-l:#fdf4e0;
+  --slate:#3b5068; --muted:#8a8580;
+  --ok:#3b7347; --ok-l:#e8f3eb;
+  --warn:#a87710; --warn-l:#fdf4e2;
+  --err:#bf3030;
+  --sh-sm:0 1px 3px rgba(15,26,38,.07);
+  --sh:0 1px 4px rgba(15,26,38,.06),0 6px 20px rgba(15,26,38,.08);
+  --sh-lg:0 4px 14px rgba(15,26,38,.1),0 16px 40px rgba(15,26,38,.11);
+  --r:14px; --r-sm:8px; --t:.18s ease;
 }
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Archivo',sans-serif;background:var(--paper);color:var(--ink);
-  background-image:radial-gradient(circle at 1px 1px, rgba(26,24,20,.04) 1px, transparent 0);
-  background-size:22px 22px;}
-h1,h2,h3,.disp{font-family:'Fraunces',serif;letter-spacing:-.01em}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:var(--ink);line-height:1.5;-webkit-font-smoothing:antialiased}
+h1,h2,h3,.disp{font-family:'Fraunces',Georgia,serif;letter-spacing:-.02em}
+a{color:var(--terra)}
 
-/* layout */
-.app{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
-.side{background:var(--ink);color:#e8e3d8;padding:26px 18px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column}
-.brand{font-family:'Fraunces',serif;font-size:25px;font-weight:600;line-height:1.05;margin-bottom:4px}
-.brand b{color:var(--terra)}
-.brand-sub{font-size:11px;color:#9c958a;letter-spacing:.14em;text-transform:uppercase;margin-bottom:30px}
-.nav{display:flex;flex-direction:column;gap:3px;flex:1}
-.nav button{background:none;border:none;color:#c9c2b5;text-align:left;padding:11px 13px;border-radius:9px;
-  font-family:'Archivo';font-size:14.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:11px;transition:.15s}
-.nav button:hover{background:rgba(255,255,255,.06);color:#fff}
-.nav button.on{background:var(--terra);color:#fff}
-.nav .ic{width:18px;text-align:center;font-size:15px}
-.side-foot{font-size:11px;color:#6f685d;border-top:1px solid #2e2b26;padding-top:14px;line-height:1.5}
+/* ── LAYOUT ── */
+.app{display:grid;grid-template-columns:218px 1fr;min-height:100vh}
+.side{background:linear-gradient(172deg,#0f1a26 0%,#152537 52%,#1b3048 100%);color:#c2bbb2;padding:24px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto;border-right:1px solid rgba(255,255,255,.04);scrollbar-width:none}
+.side::-webkit-scrollbar{display:none}
+.brand{font-family:'Fraunces',serif;font-size:23px;font-weight:600;line-height:1.1;margin-bottom:2px;padding:0 8px;letter-spacing:-.02em}
+.brand b{color:#e07848}
+.brand-sub{font-size:9.5px;color:#50606e;letter-spacing:.18em;text-transform:uppercase;margin-bottom:22px;padding:0 8px}
+.nav{display:flex;flex-direction:column;gap:2px;flex:1}
+.nav button{background:none;border:none;color:#8a8480;text-align:left;padding:8px 10px;border-radius:8px;font-family:'Archivo';font-size:12.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:9px;transition:background var(--t),color var(--t);width:100%}
+.nav button:hover{background:rgba(255,255,255,.07);color:#e0dbd0}
+.nav button.on{background:rgba(192,87,43,.22);color:#e07848;font-weight:600}
+.nav .ic{width:17px;text-align:center;font-size:13px;flex-shrink:0;opacity:.85}
+.side-foot{font-size:10.5px;color:#44505e;border-top:1px solid rgba(255,255,255,.06);padding:14px 8px 0;margin-top:10px;line-height:1.7}
 
-.main{padding:0;overflow-x:hidden}
-.topbar{padding:22px 34px 0;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px}
-.pg-t{font-size:30px;font-weight:600}
-.pg-d{font-size:13.5px;color:var(--muted);margin-top:2px}
-.content{padding:24px 34px 60px}
+.main{background:var(--paper);overflow-x:hidden}
+.topbar{padding:30px 36px 0;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:26px}
+.pg-t{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
+.pg-d{font-size:13px;color:var(--muted);margin-top:4px}
+.content{padding:0 36px 60px}
 
-.btn{font-family:'Archivo';font-weight:600;font-size:13.5px;border:none;border-radius:9px;padding:10px 16px;cursor:pointer;transition:.15s;display:inline-flex;align-items:center;gap:7px}
-.btn-p{background:var(--terra);color:#fff}.btn-p:hover{background:var(--terra-d)}
-.btn-g{background:var(--card);color:var(--ink);border:1px solid var(--line)}.btn-g:hover{border-color:var(--ink)}
-.btn-sm{padding:6px 11px;font-size:12px}
+/* ── BUTTONS ── */
+.btn{font-family:'Archivo';font-weight:600;font-size:13px;border:none;border-radius:9px;padding:10px 18px;cursor:pointer;transition:background var(--t),box-shadow var(--t),transform .1s;display:inline-flex;align-items:center;gap:7px;text-decoration:none;white-space:nowrap;line-height:1}
+.btn:active{transform:scale(.98)}
+.btn-p{background:var(--terra);color:#fff}
+.btn-p:hover{background:var(--terra-d);box-shadow:0 2px 10px rgba(192,87,43,.35)}
+.btn-g{background:var(--card);color:var(--ink);border:1.5px solid var(--line)}
+.btn-g:hover{border-color:var(--ink-2)}
+.btn-sm{padding:6px 12px;font-size:11.5px;border-radius:7px}
 
-/* cards & grid */
+/* ── CARDS & GRID ── */
 .grid{display:grid;gap:16px}
 .g4{grid-template-columns:repeat(4,1fr)}.g3{grid-template-columns:repeat(3,1fr)}.g2{grid-template-columns:1fr 1fr}
-.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:22px;box-shadow:var(--sh);transition:box-shadow var(--t)}
+.card:hover{box-shadow:var(--sh-lg)}
+
+/* ── STAT CARDS ── */
 .stat{position:relative;overflow:hidden}
-.stat .lab{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;font-weight:600}
-.stat .num{font-family:'Fraunces';font-size:34px;font-weight:600;margin-top:6px;line-height:1}
-.stat .sub{font-size:12px;color:var(--muted);margin-top:5px}
-.stat .corner{position:absolute;right:-8px;top:-8px;font-size:54px;opacity:.07}
-.sect-t{font-family:'Fraunces';font-size:20px;font-weight:600;margin:6px 0 14px;display:flex;align-items:center;gap:9px}
-.sect-t .bar{width:4px;height:20px;background:var(--terra);border-radius:2px}
+.stat .lab{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700;margin-bottom:12px}
+.stat .num{font-family:'Fraunces',serif;font-size:36px;font-weight:600;line-height:1;letter-spacing:-.02em}
+.stat .sub{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.4}
+.stat .corner{position:absolute;right:-2px;top:-4px;font-size:54px;opacity:.055;line-height:1}
 
-#map,#mapAnnunci{height:560px;border-radius:14px;border:1px solid var(--line);z-index:1}
+/* ── SECTION TITLE ── */
+.sect-t{font-family:'Fraunces',serif;font-size:18px;font-weight:600;margin:0 0 16px;display:flex;align-items:center;gap:10px;letter-spacing:-.01em}
+.sect-t .bar{width:4px;height:18px;background:var(--terra);border-radius:2px;flex-shrink:0}
+
+/* ── MAPS ── */
+#map,#mapAnnunci,#mapAste{height:560px;border-radius:var(--r);border:1px solid var(--line);z-index:1}
 .leaflet-popup-content{font-family:'Archivo';font-size:13px}
-.legend{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
-.legend .row{display:flex;align-items:center;gap:9px;font-size:13px;padding:4px 0}
-.dot{width:13px;height:13px;border-radius:50%;flex-shrink:0}
+.legend{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.legend .row{display:flex;align-items:center;gap:9px;font-size:13px;padding:5px 0}
+.dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.2)}
 
+/* ── TABLES ── */
 table{width:100%;border-collapse:collapse;font-size:13.5px}
-th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);padding:9px 10px;border-bottom:2px solid var(--line);font-weight:700}
-td{padding:11px 10px;border-bottom:1px solid var(--line)}
-tr:hover td{background:rgba(181,86,47,.04)}
-.tag{display:inline-block;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
-.t-acq{background:#e8efe4;color:var(--olive)}.t-tratt{background:#fbf0d8;color:var(--warn)}
-.t-vend{background:#e4ece9;color:var(--ok)}.t-lead{background:#f2e3dc;color:var(--terra)}
-.t-mand{background:#e3e8eb;color:var(--slate)}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);padding:10px 14px;border-bottom:2px solid var(--line);font-weight:700;white-space:nowrap}
+td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:last-child td{border-bottom:none}
+tr:hover td{background:var(--terra-l)}
+.tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.t-acq{background:var(--olive-l);color:var(--olive)}
+.t-tratt{background:var(--warn-l);color:var(--warn)}
+.t-vend{background:var(--ok-l);color:var(--ok)}
+.t-lead{background:var(--terra-l);color:var(--terra-d)}
+.t-mand{background:#edf0f5;color:var(--slate)}
 
-/* forms */
-.modal-bg{position:fixed;inset:0;background:rgba(26,24,20,.55);backdrop-filter:blur(3px);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto}
+/* ── FORMS / MODAL ── */
+.modal-bg{position:fixed;inset:0;background:rgba(15,26,38,.52);backdrop-filter:blur(4px);z-index:1000;display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto}
 .modal-bg.show{display:flex}
-.modal{background:var(--card);border-radius:16px;padding:26px;width:100%;max-width:540px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
-.modal h2{font-size:23px;margin-bottom:18px}
+.modal{background:var(--card);border-radius:18px;padding:28px;width:100%;max-width:540px;box-shadow:var(--sh-lg),0 0 0 1px var(--line);margin:auto}
+.modal h2{font-family:'Fraunces',serif;font-size:22px;margin-bottom:20px;letter-spacing:-.01em}
 .fld{margin-bottom:14px}
-.fld label{display:block;font-size:12.5px;font-weight:600;color:var(--slate);margin-bottom:5px}
-.fld input,.fld select,.fld textarea{width:100%;font-family:'Archivo';font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;color:var(--ink)}
-.fld input:focus,.fld select:focus,.fld textarea:focus{outline:none;border-color:var(--terra)}
+.fld label{display:block;font-size:11px;font-weight:700;color:var(--slate);margin-bottom:5px;letter-spacing:.05em;text-transform:uppercase}
+.fld input,.fld select,.fld textarea{width:100%;font-family:'Archivo';font-size:14px;padding:10px 12px;border:1.5px solid var(--line);border-radius:9px;background:#fff;color:var(--ink);transition:border-color var(--t),box-shadow var(--t);outline:none}
+.fld input:focus,.fld select:focus,.fld textarea:focus{border-color:var(--terra);box-shadow:0 0 0 3px rgba(192,87,43,.12)}
 .fld textarea{resize:vertical;min-height:70px}
 .fld-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-.modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 
+/* ── PIPELINE ── */
 .pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
-.col{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;min-height:200px}
-.col-h{font-family:'Fraunces';font-size:15px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
-.col-h .cnt{background:var(--ink);color:#fff;font-family:'Archivo';font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
-.lead-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px;margin-bottom:9px;cursor:grab;font-size:13px}
-.lead-card:active{cursor:grabbing}
-.lead-card .nm{font-weight:700}
-.lead-card .meta{font-size:11.5px;color:var(--muted);margin-top:3px}
-.lead-card .mv{margin-top:7px;display:flex;gap:5px}
-.lead-card .mv button{font-size:10px;padding:3px 7px;border:1px solid var(--line);background:var(--paper);border-radius:6px;cursor:pointer}
+.col{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px;min-height:200px}
+.col-h{font-family:'Fraunces',serif;font-size:14px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;color:var(--slate);padding-bottom:10px;border-bottom:1px solid var(--line)}
+.col-h .cnt{background:var(--ink);color:#fff;font-family:'Archivo';font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;min-width:22px;text-align:center}
+.lead-card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:9px;font-size:13px;box-shadow:var(--sh-sm);transition:box-shadow var(--t),transform var(--t)}
+.lead-card:hover{box-shadow:var(--sh);transform:translateY(-1px)}
+.lead-card .nm{font-weight:700;font-size:13.5px}
+.lead-card .meta{font-size:11.5px;color:var(--muted);margin-top:3px;line-height:1.5}
+.lead-card .mv{margin-top:9px;display:flex;gap:4px;flex-wrap:wrap}
+.lead-card .mv button{font-size:10.5px;padding:3px 8px;border:1px solid var(--line);background:var(--paper);border-radius:6px;cursor:pointer;font-family:'Archivo';font-weight:500;transition:.15s}
 .lead-card .mv button:hover{background:var(--terra);color:#fff;border-color:var(--terra)}
+.score-bar{height:3px;background:var(--line);border-radius:2px;margin-top:10px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:2px}
 
-.tool-tabs{display:flex;gap:8px;margin-bottom:18px;flex-wrap:wrap}
-.tool-tabs button{font-family:'Archivo';font-weight:600;font-size:13px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:var(--card);cursor:pointer}
-.tool-tabs button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.out-box{background:#fff;border:1px solid var(--line);border-radius:12px;padding:18px;font-size:14px;line-height:1.65;white-space:pre-wrap;min-height:120px}
-.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:9px}
-.bar-row .zn{width:130px;font-size:13px;font-weight:600}
-.bar-track{flex:1;height:22px;background:var(--paper);border-radius:6px;overflow:hidden;position:relative;border:1px solid var(--line)}
-.bar-fill{height:100%;background:linear-gradient(90deg,var(--terra),var(--gold));border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:11px;font-weight:700}
-.note{background:#fbf6ea;border:1px solid var(--gold);border-radius:10px;padding:12px 14px;font-size:12.5px;color:#6b5a2e;line-height:1.5}
-.empty{text-align:center;color:var(--muted);padding:40px 20px;font-size:14px}
-@media(max-width:880px){.app{grid-template-columns:1fr}.side{position:relative;height:auto}.g4{grid-template-columns:1fr 1fr}.g3,.g2{grid-template-columns:1fr}.pipeline{grid-template-columns:1fr 1fr}}
+/* ── TOOLS ── */
+.tool-tabs{display:flex;gap:4px;margin-bottom:20px;flex-wrap:wrap;background:var(--paper);padding:4px;border-radius:11px;border:1px solid var(--line);width:fit-content}
+.tool-tabs button{font-family:'Archivo';font-weight:600;font-size:13px;padding:7px 15px;border-radius:8px;border:none;background:none;cursor:pointer;color:var(--muted);transition:.15s}
+.tool-tabs button.on{background:var(--card);color:var(--ink);box-shadow:var(--sh-sm)}
+.out-box{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:18px;font-size:14px;line-height:1.7;white-space:pre-wrap;min-height:120px;color:var(--slate)}
+
+/* ── BAR CHART ── */
+.bar-row{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.bar-row .zn{width:132px;font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex-shrink:0}
+.bar-track{flex:1;height:22px;background:var(--paper);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
+.bar-fill{height:100%;background:linear-gradient(90deg,var(--terra),var(--gold));border-radius:5px;display:flex;align-items:center;justify-content:flex-end;padding-right:8px;color:#fff;font-size:10.5px;font-weight:700;min-width:36px}
+
+/* ── MISC ── */
+.note{background:var(--gold-l);border:1px solid #e5c870;border-radius:10px;padding:13px 16px;font-size:12.5px;color:#5e4808;line-height:1.6}
+.empty{text-align:center;color:var(--muted);padding:36px 16px;font-size:13.5px;line-height:1.6}
+
+/* ── RESPONSIVE ── */
+@media(max-width:900px){
+  .app{grid-template-columns:1fr}
+  .side{position:relative;height:auto;padding:16px}
+  .nav{flex-direction:row;flex-wrap:wrap}
+  .nav button{padding:7px 10px;font-size:12px}
+  .topbar{padding:20px 20px 0}
+  .content{padding:0 20px 40px}
+  .g4{grid-template-columns:1fr 1fr}
+  .g3{grid-template-columns:1fr 1fr}
+  .g2{grid-template-columns:1fr}
+  .pipeline{grid-template-columns:1fr 1fr}
+}
+@media(max-width:560px){
+  .g4,.g3{grid-template-columns:1fr}
+  .pipeline{grid-template-columns:1fr}
+}
 </style>
 </head>
 <body>
-<div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:20px">
-  <div style="background:var(--card);border-radius:18px;padding:38px 34px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.4)">
-    <div style="font-family:'Fraunces',serif;font-size:30px;font-weight:600;text-align:center">Casa<b style="color:var(--terra)">Busto</b></div>
-    <div style="font-size:11px;color:var(--muted);letter-spacing:.14em;text-transform:uppercase;text-align:center;margin-bottom:26px">Pro · Accesso riservato</div>
+<div id="loginOverlay" style="position:fixed;inset:0;z-index:5000;background:linear-gradient(135deg,#0f1a26 0%,#152537 50%,#1b3048 100%);display:flex;align-items:center;justify-content:center;padding:20px">
+  <div style="background:#fff;border-radius:20px;padding:40px 36px;width:100%;max-width:370px;box-shadow:0 24px 60px rgba(0,0,0,.5)">
+    <div style="font-family:'Fraunces',serif;font-size:32px;font-weight:600;text-align:center;letter-spacing:-.02em;margin-bottom:3px">Casa<b style="color:var(--terra)">Busto</b></div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:.18em;text-transform:uppercase;text-align:center;margin-bottom:28px">Pro · Accesso riservato</div>
     <div class="fld"><label>Nome utente</label><input id="lg_user" autocomplete="username" value="admin"></div>
     <div class="fld"><label>Password</label><input id="lg_pass" type="password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()"></div>
-    <button class="btn btn-p" style="width:100%;margin-top:6px" onclick="doLogin()">Entra</button>
+    <button class="btn btn-p" style="width:100%;justify-content:center;margin-top:8px;padding:13px" onclick="doLogin()">Entra</button>
     <div id="lg_err" style="color:var(--terra);font-size:13px;margin-top:12px;text-align:center;min-height:18px"></div>
   </div>
 </div>
@@ -1060,49 +1106,51 @@ function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
 /* ================================================================
    MAPPA 3D — MapLibre GL JS + OpenFreeMap + Catasto WMS + Immobili
    ================================================================ */
-let map3dObj = null;
+let map3dObj=null, map3dReady=false;
 function vMappa3D(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer">
         <input type="checkbox" id="togCatasto" onchange="toggleCatastoLayer(this.checked)"> Catasto
       </label>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:60,bearing:-20,zoom:15})">Vista 3D</button>
-      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:0,bearing:0,zoom:14})">Vista piano</button>
+      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:60,bearing:-20,zoom:15,duration:800})">Vista 3D</button>
+      <button class="btn btn-g btn-sm" onclick="map3dObj&&map3dObj.easeTo({pitch:0,bearing:0,zoom:14,duration:800})">Vista piano</button>
     </div>`;
   document.getElementById('view').innerHTML=`
-    <div id="map3d" style="height:580px;border-radius:14px;border:1px solid var(--line);overflow:hidden"></div>
+    <div id="map3d" style="height:580px;border-radius:var(--r);border:1px solid var(--line);overflow:hidden;position:relative">
+      <div id="map3dLoading" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:var(--paper);z-index:10;font-size:14px;color:var(--muted)">Caricamento mappa 3D…</div>
+    </div>
     <div class="grid g3" style="margin-top:14px">
       <div class="card">
         <div class="sect-t"><span class="bar"></span>Legenda</div>
-        <div style="font-size:13px;line-height:2.2">
-          <span style="display:inline-block;width:13px;height:13px;background:var(--olive);border-radius:50%;margin-right:7px;vertical-align:middle"></span>Acquisito<br>
-          <span style="display:inline-block;width:13px;height:13px;background:var(--slate);border-radius:50%;margin-right:7px;vertical-align:middle"></span>In mandato<br>
-          <span style="display:inline-block;width:13px;height:13px;background:var(--warn);border-radius:50%;margin-right:7px;vertical-align:middle"></span>In trattativa<br>
-          <span style="display:inline-block;width:13px;height:13px;background:var(--terra);border-radius:50%;margin-right:7px;vertical-align:middle"></span>Zona OMI (€/mq)
+        <div style="font-size:13px;line-height:2.4">
+          <span style="display:inline-block;width:12px;height:12px;background:var(--olive);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>Acquisito<br>
+          <span style="display:inline-block;width:12px;height:12px;background:var(--slate);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>In mandato<br>
+          <span style="display:inline-block;width:12px;height:12px;background:var(--warn);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>In trattativa<br>
+          <span style="display:inline-block;width:12px;height:12px;background:var(--terra);border-radius:50%;margin-right:8px;vertical-align:middle;box-shadow:0 1px 3px rgba(0,0,0,.2)"></span>Zona OMI (€/mq)
         </div>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Controlli mappa</div>
-        <div style="font-size:12.5px;line-height:2;color:var(--slate)">
-          🖱 <b>Trascina</b> per spostarti<br>
-          🔄 <b>Ctrl + trascina</b> per ruotare<br>
-          🔍 <b>Scroll</b> per zoom<br>
-          ✅ <b>Catasto</b> mostra i confini catastali
+        <div class="sect-t"><span class="bar"></span>Controlli</div>
+        <div style="font-size:13px;line-height:2.2;color:var(--slate)">
+          <b>Trascina</b> per spostarti<br>
+          <b>Ctrl + trascina</b> per ruotare<br>
+          <b>Scroll</b> per zoom<br>
+          <b>Catasto</b> mostra i confini catastali ufficiali
         </div>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Sommario</div>
-        <div style="font-size:13.5px;line-height:2">
-          <b>${immobili.length}</b> immobili in portafoglio<br>
-          <b>${immobili.filter(i=>i.stato==='mandato').length}</b> in mandato<br>
-          <b>${leads.filter(l=>l.fase!=='mandato').length}</b> lead attivi<br>
-          <b>${ZONE.length}</b> zone monitorate
+        <div class="sect-t"><span class="bar"></span>Portfolio</div>
+        <div style="font-size:14px;line-height:2.2">
+          <b>${immobili.length}</b> <span style="color:var(--muted)">immobili totali</span><br>
+          <b>${immobili.filter(i=>i.stato==='mandato').length}</b> <span style="color:var(--muted)">in mandato</span><br>
+          <b>${leads.filter(l=>l.fase!=='mandato').length}</b> <span style="color:var(--muted)">lead attivi</span><br>
+          <b>${ZONE.length}</b> <span style="color:var(--muted)">zone monitorate</span>
         </div>
       </div>
     </div>`;
   setTimeout(()=>{
-    if(map3dObj){map3dObj.remove();map3dObj=null;}
+    if(map3dObj){map3dObj.remove();map3dObj=null;map3dReady=false;}
     map3dObj=new maplibregl.Map({
       container:'map3d',
       style:'https://tiles.openfreemap.org/styles/bright',
@@ -1110,60 +1158,81 @@ function vMappa3D(){
     });
     map3dObj.addControl(new maplibregl.NavigationControl(),'top-right');
     map3dObj.on('load',()=>{
-      // Trova l'ultimo layer di testo per inserire edifici sotto le etichette
-      const layers=map3dObj.getStyle().layers;
-      let labelId;
-      for(const l of layers){if(l.type==='symbol'&&l.layout&&l.layout['text-field']){labelId=l.id;break;}}
-      // Edifici 3D da OpenStreetMap
-      map3dObj.addLayer({
-        id:'3d-buildings',source:'openfreemap','source-layer':'building',
-        type:'fill-extrusion',minzoom:14,
-        filter:['!=',['get','hide_3d'],true],
-        paint:{
-          'fill-extrusion-color':['interpolate',['linear'],['get','render_height'],
-            0,'#ede9e1',15,'#d9d3c7',40,'#bdb5a8'],
-          'fill-extrusion-height':['interpolate',['linear'],['zoom'],
-            14,0,15,['coalesce',['get','render_height'],4]],
-          'fill-extrusion-base':['case',['>=',['zoom'],15],
-            ['coalesce',['get','render_min_height'],0],0],
-          'fill-extrusion-opacity':0.8
-        }
-      },labelId);
-      // Catasto WMS (Agenzia delle Entrate — proxy server per evitare CORS)
+      const ldr=document.getElementById('map3dLoading');
+      if(ldr)ldr.style.display='none';
+      map3dReady=true;
+
+      // Rileva source vettoriale dinamicamente (OpenFreeMap usa 'openmaptiles')
+      const sources=map3dObj.getStyle().sources;
+      let vecSrc=null;
+      for(const[id,s]of Object.entries(sources)){if(s.type==='vector'){vecSrc=id;break;}}
+
+      // Primo layer symbol (etichette) → inserisce edifici sotto le label
+      const firstLabel=map3dObj.getStyle().layers.find(l=>l.type==='symbol'&&l.layout?.['text-field'])?.id;
+
+      if(vecSrc){
+        try{
+          map3dObj.addLayer({
+            id:'3d-buildings',source:vecSrc,'source-layer':'building',
+            type:'fill-extrusion',minzoom:14,
+            filter:['!=',['get','hide_3d'],true],
+            paint:{
+              'fill-extrusion-color':['interpolate',['linear'],['get','render_height'],
+                0,'#ede9e1',15,'#d9d3c7',40,'#c5bdb5'],
+              'fill-extrusion-height':['interpolate',['linear'],['zoom'],
+                14,0,15,['coalesce',['get','render_height'],4]],
+              'fill-extrusion-base':['case',['>=',['zoom'],15],
+                ['coalesce',['get','render_min_height'],0],0],
+              'fill-extrusion-opacity':0.82
+            }
+          },firstLabel);
+        }catch(e){console.warn('[3D] edifici:',e.message);}
+      }
+
+      // Catasto WMS via proxy (evita CORS)
       map3dObj.addSource('catasto',{type:'raster',
         tiles:['/api/catasto-tile?bbox={bbox-epsg-3857}'],
-        tileSize:256,attribution:'© Agenzia delle Entrate'});
+        tileSize:256,attribution:'© Agenzia delle Entrate — CC-BY 4.0'});
       map3dObj.addLayer({id:'catasto-layer',type:'raster',source:'catasto',
-        paint:{'raster-opacity':0.55},layout:{visibility:'none'}});
-      // Pin zone OMI
+        paint:{'raster-opacity':0.6},layout:{visibility:'none'}});
+
+      // Marker zone OMI
       ZONE.forEach(z=>{
         const v=omi[z.n]||1500;
-        const col=v>1800?'#b5562f':v>1600?'#c08a2e':'#5f6b3c';
+        const col=v>1900?'#bf5628':v>1650?'#b5820a':'#4d6844';
         const el=document.createElement('div');
-        el.innerHTML=`<div style="background:${col};color:#fff;font-size:10px;font-weight:700;padding:3px 7px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.25)">${v}€</div>`;
+        el.innerHTML=`<div style="background:${col};color:#fff;font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3);cursor:pointer">${v} €</div>`;
         new maplibregl.Marker({element:el,anchor:'bottom'})
           .setLngLat([z.lng,z.lat])
-          .setPopup(new maplibregl.Popup({offset:25}).setHTML(`<b style="font-family:serif">${z.n}</b><br>Valore: <b>${v} €/mq</b>`))
+          .setPopup(new maplibregl.Popup({offset:26,maxWidth:'200px'})
+            .setHTML(`<b style="font-family:serif;font-size:14px">${z.n}</b><br><span style="font-size:12px">Valore: <b>${v} €/mq</b></span>`))
           .addTo(map3dObj);
       });
-      // Pin immobili
-      const colMap={acq:'#5f6b3c',mandato:'#3a4a52',tratt:'#c08a2e',vend:'#4a7c4e'};
+
+      // Marker immobili in portafoglio
+      const colMap={acq:'#4d6844',mandato:'#3b5068',tratt:'#b5820a',vend:'#3b7347'};
       immobili.forEach(imm=>{
-        const z=zoneOf(imm.zona);const jit=()=>(Math.random()-.5)*0.004;
+        const z=zoneOf(imm.zona);
+        const jit=()=>(Math.random()-.5)*0.004;
         const el=document.createElement('div');
-        el.style.cssText=`width:14px;height:14px;border-radius:50%;background:${colMap[imm.stato]||'#888'};border:2px solid #fff;cursor:pointer;box-shadow:0 1px 5px rgba(0,0,0,.35)`;
+        el.style.cssText=`width:14px;height:14px;border-radius:50%;background:${colMap[imm.stato]||'#888'};border:2.5px solid #fff;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4)`;
         new maplibregl.Marker({element:el})
           .setLngLat([z.lng+jit(),z.lat+jit()])
-          .setPopup(new maplibregl.Popup({offset:12}).setHTML(
-            `<b>${imm.tipo}</b> · ${imm.zona}<br>${imm.ind||''}<br><b>${eur(imm.prezzo)}</b> · ${imm.mq} mq`))
+          .setPopup(new maplibregl.Popup({offset:14,maxWidth:'220px'})
+            .setHTML(`<b>${imm.tipo}</b> · ${imm.zona}<br>${imm.ind?`<span style="color:#888">${imm.ind}</span><br>`:''}
+              <b style="font-size:13px">${eur(imm.prezzo)}</b> · ${imm.mq} mq`))
           .addTo(map3dObj);
       });
     });
+    map3dObj.on('error',e=>console.warn('[MapLibre]',e.error?.message||e));
   },80);
 }
 function toggleCatastoLayer(show){
-  if(!map3dObj)return;
-  map3dObj.setLayoutProperty('catasto-layer','visibility',show?'visible':'none');
+  if(!map3dObj||!map3dReady)return;
+  try{
+    if(map3dObj.getLayer('catasto-layer'))
+      map3dObj.setLayoutProperty('catasto-layer','visibility',show?'visible':'none');
+  }catch(e){console.warn('[catasto]',e.message);}
 }
 
 /* ================================================================
@@ -1226,20 +1295,21 @@ function vAcq(){
       return `<div class="col">
         <div class="col-h">${lab}<span class="cnt">${ls.length}</span></div>
         ${ls.map(l=>`<div class="lead-card" style="border-left:3px solid ${scoreColor(l._score)}">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
             <div class="nm">${l.nome}</div>
-            <span style="font-size:10px;font-weight:700;color:${scoreColor(l._score)};white-space:nowrap;margin-left:6px">${l._score}</span>
+            <span style="font-size:10px;font-weight:700;color:#fff;background:${scoreColor(l._score)};padding:2px 6px;border-radius:12px;white-space:nowrap;flex-shrink:0">${l._score}</span>
           </div>
-          <div class="meta">${l.zona} · ${l.fonte}${l.tel?` · <a href="tel:${l.tel}" style="color:var(--terra)">${l.tel}</a>`:''}</div>
-          ${l.note?`<div class="meta" style="font-style:italic;margin-top:3px">${l.note}</div>`:''}
-          <div class="meta" style="margin-top:5px;color:${scoreColor(l._score)};font-size:11px;font-weight:600">${suggerisciAzione(l)}</div>
+          <div class="meta">${l.zona} · ${l.fonte}${l.tel?` · <a href="tel:${l.tel}" style="color:var(--terra);text-decoration:none">${l.tel}</a>`:''}</div>
+          ${l.note?`<div class="meta" style="font-style:italic;margin-top:3px;line-height:1.4">${l.note}</div>`:''}
+          <div class="score-bar"><div class="score-bar-fill" style="width:${l._score}%;background:${scoreColor(l._score)}"></div></div>
+          <div style="font-size:11px;font-weight:600;color:${scoreColor(l._score)};margin-top:6px">${suggerisciAzione(l)}</div>
           <div class="mv">
-            ${k!=='contatto'?`<button onclick="moveLead('${l.id}',-1)">←</button>`:''}
-            ${k!=='mandato'?`<button onclick="moveLead('${l.id}',1)">→</button>`:''}
+            ${k!=='contatto'?`<button onclick="moveLead('${l.id}',-1)">← Indietro</button>`:''}
+            ${k!=='mandato'?`<button onclick="moveLead('${l.id}',1)">Avanza →</button>`:''}
             <button onclick="modalLead('${l.id}')">✎</button>
             <button onclick="delItem('leads','${l.id}')">✕</button>
           </div>
-        </div>`).join('')||'<div class="empty" style="font-size:12px;padding:18px">vuoto</div>'}
+        </div>`).join('')||'<div class="empty" style="font-size:12px;padding:18px 8px">Nessun lead in questa fase</div>'}
       </div>`;
     }).join('')}
     </div>`;

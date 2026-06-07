@@ -207,7 +207,8 @@ app.get("/api/omi", requireLogin, async (req, res) => {
 app.get("/api/catasto-tile", requireLogin, async (req, res) => {
   const bbox = req.query.bbox;
   if (!bbox) return res.status(400).end();
-  const url = `https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=CP.CadastralParcel&STYLES=&FORMAT=image/png&TRANSPARENT=true&CRS=EPSG:3857&WIDTH=256&HEIGHT=256&BBOX=${encodeURIComponent(bbox)}`;
+  const p=new URLSearchParams({SERVICE:'WMS',VERSION:'1.3.0',REQUEST:'GetMap',LAYERS:'CP.CadastralParcel',STYLES:'',FORMAT:'image/png',TRANSPARENT:'true',CRS:'EPSG:3857',WIDTH:'256',HEIGHT:'256',BBOX:bbox});
+  const url=`https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?${p}`;
   try {
     const r = await fetch(url);
     const buf = await r.arrayBuffer();

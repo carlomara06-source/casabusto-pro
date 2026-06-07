@@ -30,10 +30,22 @@ body{font-family:'Archivo',system-ui,sans-serif;background:var(--paper);color:va
 h1,h2,h3,.disp{font-family:'Fraunces',Georgia,serif;letter-spacing:-.02em}
 a{color:var(--terra)}
 
-/* ── LAYOUT ── */
-.app{display:grid;grid-template-columns:218px 1fr;min-height:100vh}
-.side{background:linear-gradient(172deg,#0f1a26 0%,#152537 52%,#1b3048 100%);color:#c2bbb2;padding:24px 12px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;overflow-y:auto;border-right:1px solid rgba(255,255,255,.04);scrollbar-width:none}
+/* ── LAYOUT — collapsible sidebar ── */
+.app{display:block;min-height:100vh}
+
+/* Hamburger */
+.hbg{position:fixed;top:14px;left:14px;z-index:640;background:rgba(255,255,255,.94);border:1.5px solid var(--line);border-radius:11px;padding:10px 12px;cursor:pointer;box-shadow:var(--sh);backdrop-filter:blur(10px);display:flex;flex-direction:column;gap:5px;transition:background var(--t),box-shadow var(--t)}
+.hbg:hover{background:#fff;box-shadow:var(--sh-lg)}
+.hbg span{display:block;width:19px;height:2px;background:var(--ink);border-radius:2px;transition:transform .24s,opacity .18s}
+
+/* Overlay behind sidebar */
+.side-ov{position:fixed;inset:0;background:rgba(15,26,38,.42);backdrop-filter:blur(3px);z-index:638;opacity:0;pointer-events:none;transition:opacity .3s}
+.side-ov.show{opacity:1;pointer-events:all}
+
+/* Sidebar */
+.side{background:linear-gradient(172deg,#0f1a26 0%,#152537 52%,#1b3048 100%);color:#c2bbb2;padding:24px 12px;position:fixed;left:-248px;top:0;width:240px;height:100vh;display:flex;flex-direction:column;overflow-y:auto;border-right:1px solid rgba(255,255,255,.04);scrollbar-width:none;z-index:639;transition:left .32s cubic-bezier(.4,0,.2,1);box-shadow:none}
 .side::-webkit-scrollbar{display:none}
+.side.open{left:0;box-shadow:16px 0 48px rgba(0,0,0,.38)}
 .brand{font-family:'Fraunces',serif;font-size:23px;font-weight:600;line-height:1.1;margin-bottom:2px;padding:0 8px;letter-spacing:-.02em}
 .brand b{color:#e07848}
 .brand-sub{font-size:9.5px;color:#50606e;letter-spacing:.18em;text-transform:uppercase;margin-bottom:22px;padding:0 8px}
@@ -42,13 +54,14 @@ a{color:var(--terra)}
 .nav button:hover{background:rgba(255,255,255,.07);color:#e0dbd0}
 .nav button.on{background:rgba(192,87,43,.22);color:#e07848;font-weight:600}
 .nav .ic{width:17px;text-align:center;font-size:13px;flex-shrink:0;opacity:.85}
+.nav-sep{height:1px;background:rgba(255,255,255,.07);margin:6px 8px}
 .side-foot{font-size:10.5px;color:#44505e;border-top:1px solid rgba(255,255,255,.06);padding:14px 8px 0;margin-top:10px;line-height:1.7}
 
-.main{background:var(--paper);overflow-x:hidden}
-.topbar{padding:30px 36px 0;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:26px}
-.pg-t{font-family:'Fraunces',serif;font-size:30px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
+.main{background:var(--paper);overflow-x:hidden;width:100%}
+.topbar{padding:20px 28px 0 68px;display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:26px}
+.pg-t{font-family:'Fraunces',serif;font-size:28px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
 .pg-d{font-size:13px;color:var(--muted);margin-top:4px}
-.content{padding:0 36px 60px}
+.content{padding:0 28px 60px}
 
 /* ── BUTTONS ── */
 .btn{font-family:'Archivo';font-weight:600;font-size:13px;border:none;border-radius:9px;padding:10px 18px;cursor:pointer;transition:background var(--t),box-shadow var(--t),transform .1s;display:inline-flex;align-items:center;gap:7px;text-decoration:none;white-space:nowrap;line-height:1}
@@ -110,7 +123,7 @@ tr:hover td{background:var(--terra-l)}
 .modal-foot{display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line)}
 
 /* ── PIPELINE ── */
-.pipeline{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.pipeline{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
 .col{background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:14px;min-height:200px}
 .col-h{font-family:'Fraunces',serif;font-size:14px;font-weight:600;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;color:var(--slate);padding-bottom:10px;border-bottom:1px solid var(--line)}
 .col-h .cnt{background:var(--ink);color:#fff;font-family:'Archivo';font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;min-width:22px;text-align:center}
@@ -140,18 +153,25 @@ tr:hover td{background:var(--terra-l)}
 .note{background:var(--gold-l);border:1px solid #e5c870;border-radius:10px;padding:13px 16px;font-size:12.5px;color:#5e4808;line-height:1.6}
 .empty{text-align:center;color:var(--muted);padding:36px 16px;font-size:13.5px;line-height:1.6}
 
+/* ── LOGIN ANIMATION ── */
+@keyframes mapFadeIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
+.app-enter{animation:mapFadeIn .7s cubic-bezier(.4,0,.2,1) both}
+
+/* ── PORTAL FRAME ── */
+.portal-frame-wrap{border-radius:14px;border:1px solid var(--line);overflow:hidden;background:var(--paper);position:relative}
+.portal-frame-wrap iframe{display:block;width:100%;height:680px;border:none}
+
+/* ── INCARICHI AI BADGE ── */
+.ai-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#3b5068,#1b3048);color:#e0dbd0;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.04em}
+
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
-  .app{grid-template-columns:1fr}
-  .side{position:relative;height:auto;padding:16px}
-  .nav{flex-direction:row;flex-wrap:wrap}
-  .nav button{padding:7px 10px;font-size:12px}
-  .topbar{padding:20px 20px 0}
-  .content{padding:0 20px 40px}
+  .topbar{padding:16px 16px 0 60px}
+  .content{padding:0 16px 40px}
   .g4{grid-template-columns:1fr 1fr}
   .g3{grid-template-columns:1fr 1fr}
   .g2{grid-template-columns:1fr}
-  .pipeline{grid-template-columns:1fr 1fr}
+  .pipeline{grid-template-columns:1fr}
 }
 @media(max-width:560px){
   .g4,.g3{grid-template-columns:1fr}
@@ -171,27 +191,30 @@ tr:hover td{background:var(--terra-l)}
   </div>
 </div>
 <div class="app" style="display:none" id="appRoot">
-  <aside class="side">
-    <div class="brand">Casa<b>Busto</b></div>
+  <button class="hbg" id="hbg" onclick="toggleMenu()" aria-label="Menu"><span></span><span></span><span></span></button>
+  <div class="side-ov" id="sideOv" onclick="closeMenu()"></div>
+  <aside class="side" id="side">
+    <div class="brand" style="margin-top:8px">Casa<b>Busto</b></div>
     <div class="brand-sub">Gestionale Agente</div>
     <nav class="nav" id="nav">
-      <button data-v="dash" class="on"><span class="ic">◆</span>Dashboard</button>
-      <button data-v="mappa"><span class="ic">◎</span>Mappa zone</button>
-      <button data-v="mercato"><span class="ic">▲</span>Mercato reale</button>
+      <button data-v="mappa3d"><span class="ic">◈</span>Mappa 3D</button>
+      <button data-v="dash"><span class="ic">◆</span>Dashboard</button>
+      <div class="nav-sep"></div>
+      <button data-v="incarichi"><span class="ic">✍</span>Incarichi</button>
+      <button data-v="acquisizione"><span class="ic">↑</span>Acquisizione</button>
+      <button data-v="prospecting"><span class="ic">⊕</span>Prospecting AI</button>
+      <div class="nav-sep"></div>
+      <button data-v="mercato"><span class="ic">▲</span>Quotazioni zona</button>
       <button data-v="previsioni"><span class="ic">∿</span>Grafici & Previsioni</button>
+      <button data-v="annunci"><span class="ic">⚲</span>Annunci live</button>
+      <div class="nav-sep"></div>
       <button data-v="immobili"><span class="ic">⌂</span>Immobili</button>
       <button data-v="vendite"><span class="ic">€</span>Compravendite</button>
-      <button data-v="acquisizione"><span class="ic">↑</span>Acquisizione</button>
-      <button data-v="aste"><span class="ic">⚖</span>Aste giudiziarie</button>
       <button data-v="valutazione"><span class="ic">◐</span>Valutazione</button>
       <button data-v="agenda"><span class="ic">▦</span>Agenda</button>
-      <button data-v="annunci"><span class="ic">⚲</span>Annunci & mercato</button>
-      <button data-v="strumenti"><span class="ic">✎</span>Strumenti testi</button>
-      <button data-v="mappa3d"><span class="ic">◈</span>Mappa 3D</button>
-      <button data-v="prospecting"><span class="ic">⊕</span>Prospecting AI</button>
-      <button data-v="apiupdate"><span class="ic">⟳</span>Aggiorna dati API</button>
+      <button data-v="strumenti"><span class="ic">✎</span>Strumenti</button>
     </nav>
-    <div class="side-foot">Dati salvati solo su questo computer.<br>Esporta i backup regolarmente.<br><br><a href="#" onclick="doLogout();return false" style="color:#c9837a;text-decoration:none">⎋ Esci</a></div>
+    <div class="side-foot">Dati salvati localmente.<br>Esporta backup regolarmente.<br><br><a href="#" onclick="doLogout();return false" style="color:#c9837a;text-decoration:none">⎋ Esci</a></div>
   </aside>
 
   <main class="main">
@@ -322,32 +345,41 @@ function seedAgenda(){const t=new Date();const d=n=>{const x=new Date(t);x.setDa
 ];}
 
 /* ---------- ROUTER ---------- */
-const TITLES={dash:["Dashboard","Panoramica della tua attività a Busto Arsizio"],
- mappa:["Mappa zone","Valori di mercato e immobili geolocalizzati per quartiere"],
- mercato:["Mercato reale","Dati di mercato di Busto Arsizio da fonti pubbliche"],
- previsioni:["Grafici & Previsioni","Andamento storico e scenari a 6/12 mesi su tassi e notizie reali"],
+const TITLES={
+ mappa3d:["Mappa 3D","Edifici in 3D · overlay catastale · portafoglio geolocalizzato"],
+ dash:["Dashboard","Panoramica della tua attività a Busto Arsizio"],
+ incarichi:["Incarichi","Mandati attivi · analisi AI · valore e vendibilità"],
+ acquisizione:["Acquisizione","Pipeline lead: dalla valutazione al mandato"],
+ prospecting:["Prospecting AI","Analisi intelligente delle zone e opportunità"],
+ mercato:["Quotazioni zona","Dati OMI, portali di mercato e prezzi per quartiere"],
+ previsioni:["Grafici & Previsioni","Andamento storico e scenari a 6/12 mesi"],
+ annunci:["Annunci live","Portali immobiliari integrati + annunci per zona"],
  immobili:["Immobili","Portafoglio immobili in gestione"],
  vendite:["Compravendite","Registro delle transazioni concluse"],
- acquisizione:["Acquisizione","Pipeline incarichi: dal contatto al mandato"],
- aste:["Aste giudiziarie","Immobili all'asta al Tribunale di Busto — opportunità di acquisizione"],
- valutazione:["Valutazione immobile","Stima rapida basata sui prezzi di mercato reali per zona"],
- agenda:["Agenda","Appuntamenti, sopralluoghi e follow-up"],
- apiupdate:["Aggiorna dati API","Aggiorna prezzi OMI ufficiali — gratuito, Agenzia delle Entrate"],
- annunci:["Annunci & mercato","Immobili disponibili sul territorio per zona"],
- strumenti:["Strumenti testi","Genera annunci e lettere di acquisizione"],
- mappa3d:["Mappa 3D interattiva","Edifici in 3D con overlay catastale e immobili geolocalizzati"],
- prospecting:["Prospecting AI","Analisi intelligente delle zone e suggerimenti di acquisizione"]};
-let cur='dash';
+ valutazione:["Valutazione","Stima OMI con coefficienti di merito"],
+ agenda:["Agenda","Appuntamenti e follow-up"],
+ strumenti:["Strumenti testi","Genera annunci, lettere, script e backup"]
+};
+let cur='mappa3d';
 document.getElementById('nav').addEventListener('click',e=>{
-  const b=e.target.closest('button'); if(!b)return;
+  const b=e.target.closest('button[data-v]'); if(!b)return;
   document.querySelectorAll('#nav button').forEach(x=>x.classList.remove('on'));
-  b.classList.add('on'); cur=b.dataset.v; render();
+  b.classList.add('on'); cur=b.dataset.v; closeMenu(); render();
 });
+function updateNav(){
+  document.querySelectorAll('#nav button[data-v]').forEach(b=>{
+    b.classList.toggle('on', b.dataset.v===cur);
+  });
+}
 function render(){
-  document.getElementById('pgT').textContent=TITLES[cur][0];
-  document.getElementById('pgD').textContent=TITLES[cur][1];
+  const t=TITLES[cur]||["",""];
+  document.getElementById('pgT').textContent=t[0];
+  document.getElementById('pgD').textContent=t[1];
   document.getElementById('topAct').innerHTML='';
-  ({dash:vDash,mappa:vMappa,mercato:vMercato,previsioni:vPrevisioni,immobili:vImmobili,vendite:vVendite,acquisizione:vAcq,aste:vAste,valutazione:vValut,agenda:vAgenda,annunci:vAnnunci,strumenti:vStrum,apiupdate:vApiUpdate,mappa3d:vMappa3D,prospecting:vProspecting}[cur])();
+  document.getElementById('view').innerHTML='';
+  ({mappa3d:vMappa3D,dash:vDash,incarichi:vIncarichi,acquisizione:vAcq,prospecting:vProspecting,
+    mercato:vMercato,previsioni:vPrevisioni,annunci:vAnnunci,
+    immobili:vImmobili,vendite:vVendite,valutazione:vValut,agenda:vAgenda,strumenti:vStrum}[cur]||vDash)();
 }
 
 /* ---------- DASHBOARD ---------- */
@@ -355,39 +387,55 @@ function vDash(){
   const fatturato=vendite.reduce((s,v)=>s+(+v.provv||0),0);
   const volume=vendite.reduce((s,v)=>s+(+v.prezzo||0),0);
   const mandati=immobili.filter(i=>i.stato==='mandato').length;
-  const inPipe=leads.filter(l=>l.fase!=='mandato').length;
+  const inValut=leads.filter(l=>l.fase==='valutazione').length;
   const oggi=new Date().toISOString().slice(0,10);
   const prossimi=[...agenda].filter(a=>a.data>=oggi).sort((a,b)=>(a.data+a.ora).localeCompare(b.data+b.ora));
+  const aiAnalizzati=immobili.filter(i=>i.aiAnalisi).length;
   document.getElementById('view').innerHTML=`
     <div class="grid g4" style="margin-bottom:22px">
       ${stat('Provvigioni 2026',eur(fatturato),vendite.length+' compravendite','€')}
       ${stat('Volume venduto',eur(volume),'transato sul territorio','▲')}
-      ${stat('Immobili in mandato',mandati,'pronti per la vendita','⌂')}
-      ${stat('Lead in lavorazione',inPipe,'opportunità di incarico','↑')}
+      ${stat('Incarichi in mandato',mandati,'portafoglio attivo','✍')}
+      ${stat('Lead in valutazione',inValut,'da portare a mandato','↑')}
     </div>
-    <div class="grid" style="grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px">
-      <div class="card stat"><div class="corner disp">⚖</div><div class="lab">Aste monitorate</div>
-        <div class="num">${aste.length}</div><div class="sub">opportunità al Tribunale di Busto</div>
-        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="document.querySelector('[data-v=aste]').click()">Vedi aste →</button></div>
-      <div class="card stat"><div class="corner disp">▦</div><div class="lab">Prossimo impegno</div>
-        ${prossimi.length?`<div style="font-family:'Fraunces';font-size:21px;font-weight:600;margin-top:6px">${prossimi[0].tit}</div>
+    <div class="grid g3" style="margin-bottom:22px">
+      <div class="card stat"><div class="corner disp">🤖</div>
+        <div class="lab">Analisi AI</div>
+        <div class="num">${aiAnalizzati}</div>
+        <div class="sub">immobili con analisi foto completata</div>
+        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="cur='incarichi';updateNav();render()">Vai agli incarichi →</button>
+      </div>
+      <div class="card stat"><div class="corner disp">▦</div>
+        <div class="lab">Prossimo impegno</div>
+        ${prossimi.length?`<div style="font-family:'Fraunces';font-size:18px;font-weight:600;margin-top:6px;line-height:1.3">${prossimi[0].tit}</div>
           <div class="sub">${fmtD(prossimi[0].data)} ore ${prossimi[0].ora}</div>`:'<div class="num" style="font-size:22px">—</div><div class="sub">agenda libera</div>'}
-        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="document.querySelector('[data-v=agenda]').click()">Apri agenda →</button></div>
+        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="cur='agenda';updateNav();render()">Apri agenda →</button>
+      </div>
+      <div class="card stat"><div class="corner disp">▲</div>
+        <div class="lab">Mercato Busto</div>
+        <div class="num">${MERCATO.mediaCitta}</div>
+        <div class="sub">€/mq media città · ${MERCATO.trendQuot}</div>
+        <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="cur='mercato';updateNav();render()">Quotazioni →</button>
+      </div>
     </div>
     <div class="grid g2">
       <div class="card">
         <div class="sect-t"><span class="bar"></span>Valori di mercato per zona (€/mq)</div>
         ${barChart()}
-        <div class="note" style="margin-top:14px">Valori di mercato reali da fonti pubbliche (Immobiliare.it, idealista, Borsino Immobiliare). Vedi dettaglio e fonti nella sezione <b>Mercato reale</b>.</div>
+        <div class="note" style="margin-top:14px">Valori reali da fonti pubbliche. Vedi fonti e finestre portali in <b>Quotazioni zona</b>.</div>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Prossime azioni di acquisizione</div>
-        ${leads.filter(l=>l.fase!=='mandato').slice(0,5).map(l=>`
-          <div style="display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)">
-            <div><b>${l.nome}</b><div style="font-size:12px;color:var(--muted)">${l.zona} · ${l.note||''}</div></div>
-            <span class="tag t-lead">${l.fase}</span>
-          </div>`).join('')||'<div class="empty">Nessun lead attivo</div>'}
-        <button class="btn btn-p btn-sm" style="margin-top:14px" onclick="document.querySelector('[data-v=acquisizione]').click()">Vai alla pipeline →</button>
+        <div class="sect-t"><span class="bar"></span>Lead in valutazione</div>
+        ${leads.filter(l=>l.fase==='valutazione').slice(0,6).map(l=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
+            <div>
+              <div style="font-weight:700;font-size:13.5px">${l.nome}</div>
+              <div style="font-size:12px;color:var(--muted)">${l.zona} · ${l.note?.slice(0,50)||''}</div>
+              <div style="font-size:11px;font-weight:600;color:var(--warn);margin-top:2px">${suggerisciAzione(l)}</div>
+            </div>
+            <span style="font-size:11px;font-weight:700;color:#fff;background:${scoreColor(leadScore(l))};padding:2px 8px;border-radius:12px;white-space:nowrap;margin-left:8px">${leadScore(l)}</span>
+          </div>`).join('')||'<div class="empty">Nessun lead in valutazione</div>'}
+        <button class="btn btn-p btn-sm" style="margin-top:14px" onclick="cur='acquisizione';updateNav();render()">Pipeline acquisizione →</button>
       </div>
     </div>`;
 }
@@ -399,11 +447,32 @@ function barChart(){
     <div class="bar-track"><div class="bar-fill" style="width:${omi[z.n]/max*100}%">${omi[z.n]}</div></div></div>`).join('');
 }
 
-/* ---------- MERCATO REALE ---------- */
+/* ---------- QUOTAZIONI ZONA ---------- */
+const QUOT_FONTI=[
+  {id:'borsinoQ',nome:'Borsino Immobiliare',desc:'Trend e statistiche 2026',icon:'📈',color:'#c0572b',
+   url:'https://borsinoimmobiliare.it/quotazioni-immobiliari/lombardia/varese-provincia/busto-arsizio/'},
+  {id:'immobQ',nome:'Immobiliare.it Mercato',desc:'Prezzi per zona, mag 2026',icon:'🏠',color:'#e8392a',
+   url:'https://www.immobiliare.it/mercato-immobiliare/lombardia/busto-arsizio/'},
+  {id:'idalistaQ',nome:'Idealista Valutazioni',desc:'Valutazioni per quartiere',icon:'🔍',color:'#006699',
+   url:'https://www.idealista.it/valutazione-di-immobili/busto-arsizio-varese'},
+  {id:'wikicasaQ',nome:'Wikicasa Quotazioni',desc:'Prezzi medi storici',icon:'📊',color:'#28a745',
+   url:'https://www.wikicasa.it/quotazione-immobili/busto-arsizio/'},
+  {id:'omiQ',nome:'OMI — Ag. Entrate',desc:'Quotazioni catastali ufficiali',icon:'🏛',color:'#4d6844',
+   url:'https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari'}
+];
+let _mercatoTab='dati', _quotCur='borsinoQ';
+
 function vMercato(){
-  const sorted=[...ZONE].sort((a,b)=>omi[b.n]-omi[a.n]);
+  document.getElementById('topAct').innerHTML=`
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      <button class="btn ${_mercatoTab==='dati'?'btn-p':'btn-g'} btn-sm" onclick="_mercatoTab='dati';vMercato()">📊 Dati zona</button>
+      <button class="btn ${_mercatoTab==='finestre'?'btn-p':'btn-g'} btn-sm" onclick="_mercatoTab='finestre';vMercato()">🖥 Quotazioni live</button>
+      <button class="btn btn-g btn-sm" onclick="aggiornaTutte()">⟳ Aggiorna OMI</button>
+    </div>`;
+  if(_mercatoTab==='finestre'){ renderQuotazioniFinestre(); return; }
+  // --- TAB DATI ---
   document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:20px">📊 Dati raccolti da <b>fonti pubbliche</b> sul mercato di Busto Arsizio (mercato residenziale, prezzi di richiesta in vendita). Ultimo aggiornamento dati: <b>${MERCATO.aggiornato}</b>. Sono valori indicativi di larga massima: per una stima puntuale serve sempre una perizia.</div>
+    <div class="note" style="margin-bottom:20px">📊 Dati raccolti da <b>fonti pubbliche</b> sul mercato di Busto Arsizio. Aggiornato: <b>${MERCATO.aggiornato}</b>. Usa <b>Quotazioni live</b> per consultare i portali direttamente.</div>
     <div class="grid g4" style="margin-bottom:22px">
       ${stat('Prezzo medio città',MERCATO.mediaCitta+' €/mq','residenziale in vendita','▲')}
       ${stat('Trend quotazioni',MERCATO.trendQuot,'andamento annuo','↗')}
@@ -415,22 +484,100 @@ function vMercato(){
         <div class="sect-t"><span class="bar"></span>Prezzi reali per zona (€/mq)</div>
         ${barChart()}
         <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5">Zona più cara: <b>Centro</b> (~2.004 €/mq). Più economica: <b>Sacconago/Borsano</b> (~1.479 €/mq).</div>
+        <button class="btn btn-g btn-sm" style="margin-top:14px" onclick="_mercatoTab='finestre';vMercato()">🖥 Apri quotazioni live →</button>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Fonti dei dati</div>
-        <p style="font-size:13px;line-height:1.6;color:var(--slate);margin-bottom:14px">I numeri qui sopra provengono dai principali osservatori immobiliari pubblici. Per i valori OMI ufficiali (catastali) consulta direttamente l'Agenzia delle Entrate.</p>
-        ${[
-          ['Immobiliare.it','Prezzi per zona, mag 2026','https://www.immobiliare.it/mercato-immobiliare/lombardia/busto-arsizio/'],
-          ['idealista','Valutazioni per quartiere, gen 2026','https://www.idealista.it/valutazione-di-immobili/busto-arsizio-varese'],
-          ['Borsino Immobiliare','Trend e statistiche 2026','https://borsinoimmobiliare.it/quotazioni-immobiliari/lombardia/varese-provincia/busto-arsizio/'],
-          ['Wikicasa','Prezzi medi storici','https://www.wikicasa.it/quotazione-immobili/busto-arsizio/'],
-          ['Agenzia delle Entrate (OMI)','Quotazioni catastali ufficiali','https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari']
-        ].map(([n,d,u])=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
-          <div><b style="font-size:13.5px">${n}</b><div style="font-size:11.5px;color:var(--muted)">${d}</div></div>
-          <a href="${u}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ↗</a></div>`).join('')}
-        <div class="note" style="margin-top:14px">Per aggiornare: apri le fonti, controlla i nuovi valori e inseriscili dal pulsante <b>Aggiorna valori</b> nella sezione Mappa zone.</div>
+        <div class="sect-t"><span class="bar"></span>Fonti dati</div>
+        ${QUOT_FONTI.map(f=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
+          <div>
+            <div style="font-weight:700;font-size:13.5px">${f.icon} ${f.nome}</div>
+            <div style="font-size:11.5px;color:var(--muted)">${f.desc}</div>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-g btn-sm" onclick="_quotCur='${f.id}';_mercatoTab='finestre';vMercato()">Apri →</button>
+          </div>
+        </div>`).join('')}
+        <div id="api_global_result"></div>
       </div>
     </div>`;
+}
+
+function renderQuotazioniFinestre(){
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:14px">
+      🖥 Consulta le quotazioni direttamente dai portali senza uscire da CasaBusto.
+    </div>
+    <div class="tool-tabs" style="margin-bottom:14px">
+      ${QUOT_FONTI.map(f=>`
+        <button id="qtab_${f.id}" class="${f.id===_quotCur?'on':''}"
+          onclick="switchQuot('${f.id}')"
+          style="${f.id===_quotCur?`border-bottom:2.5px solid ${f.color}`:''}"
+        >${f.icon} ${f.nome}</button>`).join('')}
+    </div>
+    <div id="quotWrap" class="portal-frame-wrap">
+      <div id="quotLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--paper);z-index:2">
+        <div style="font-size:32px">⏳</div>
+        <div style="font-weight:600">Caricamento quotazioni…</div>
+      </div>
+      <iframe id="quotFrame" style="width:100%;height:680px;border:none;display:block"
+        onload="quotLoaded()" onerror="quotLoaded()"></iframe>
+    </div>
+    <div id="quotActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
+  loadQuot(_quotCur);
+}
+function switchQuot(id){
+  _quotCur=id;
+  QUOT_FONTI.forEach(f=>{
+    const b=document.getElementById('qtab_'+f.id);
+    if(b){b.classList.toggle('on',f.id===id);b.style.borderBottom=f.id===id?`2.5px solid ${f.color}`:'';}
+  });
+  loadQuot(id);
+}
+function loadQuot(id){
+  const f=QUOT_FONTI.find(x=>x.id===id);
+  if(!f)return;
+  const frame=document.getElementById('quotFrame');
+  const loading=document.getElementById('quotLoading');
+  const actions=document.getElementById('quotActions');
+  if(!frame)return;
+  if(loading){loading.style.display='flex';loading.innerHTML=`<div style="font-size:32px">${f.icon}</div><div style="font-weight:600">Caricamento ${f.nome}…</div>`;}
+  frame.src='/api/frame?url='+encodeURIComponent(f.url)+'&t='+Date.now();
+  if(actions)actions.innerHTML=`<a href="${f.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${f.nome} nel browser ↗</a>`;
+  clearTimeout(window._quotTimer);
+  window._quotTimer=setTimeout(()=>{
+    if(loading&&loading.style.display!=='none'){
+      loading.innerHTML=`<div style="font-size:40px">🔒</div>
+        <div style="font-weight:600;margin-top:10px">Sito non accessibile in anteprima</div>
+        <a href="${f.url}" target="_blank" class="btn btn-p btn-sm" style="margin-top:14px;text-decoration:none">Apri ${f.nome} ↗</a>`;
+    }
+  },12000);
+}
+function quotLoaded(){
+  const loading=document.getElementById('quotLoading');
+  if(loading)loading.style.display='none';
+  clearTimeout(window._quotTimer);
+}
+
+/* Aggiornamento dati OMI via API 3eurotools */
+async function aggiornaTutte(){
+  const box=document.getElementById('api_global_result');
+  if(box)box.innerHTML=`<div class="note" style="margin-top:12px">Aggiornamento OMI in corso…</div>`;
+  try{
+    const r=await fetch('/api/omi',{credentials:'same-origin',headers:authHeaders()});
+    if(r.status===401)throw new Error('sessione scaduta');
+    const resp=await r.json();
+    if(!resp.ok)throw new Error(resp.error||'errore API');
+    const today=new Date().toISOString().slice(0,10);
+    const stamps=DB.load('apiStamps',{});
+    let aggiornate=0;
+    for(const[quartiere,dati]of Object.entries(resp.data)){
+      omi[quartiere]=Math.round(dati.med); stamps[quartiere]=today; aggiornate++;
+    }
+    persist();DB.save('apiStamps',stamps);
+    if(box)box.innerHTML=`<div class="note" style="margin-top:12px;border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ Aggiornate <b>${aggiornate}</b> zone OMI. Fonte: ${resp.fonte}.</div>`;
+  }catch(e){
+    if(box)box.innerHTML=`<div class="note" style="margin-top:12px;border-color:var(--terra);color:var(--terra-d)">Errore: ${e.message}</div>`;
+  }
 }
 
 /* ---------- GRAFICI & PREVISIONI ---------- */
@@ -650,7 +797,9 @@ function vVendite(){
 }
 
 /* ---------- ACQUISIZIONE (pipeline kanban) ---------- */
-const FASI=[["contatto","Primo contatto"],["appuntamento","Appuntamento"],["valutazione","Valutazione"],["mandato","Mandato firmato"]];
+const FASI=[["valutazione","In valutazione"],["mandato","Mandato firmato"]];
+// Migra lead con vecchie fasi
+leads=leads.map(l=>(['contatto','appuntamento'].includes(l.fase)?{...l,fase:'valutazione'}:l));
 function suggerimento(){
   const cnt={};immobili.forEach(i=>cnt[i.zona]=(cnt[i.zona]||0)+1);
   const coperte=Object.keys(cnt);
@@ -663,14 +812,16 @@ function moveLead(id,d){const l=leads.find(x=>x.id===id);const idx=FASI.findInde
   const ni=Math.max(0,Math.min(FASI.length-1,idx+d));l.fase=FASI[ni][0];persist();render();}
 
 /* ---------- ANNUNCI & MERCATO ---------- */
-let mapAnn=null, annunciTab='manual'; // 'manual' | 'live'
+let mapAnn=null, annunciTab='portali'; // 'manual' | 'live' | 'portali'
 function vAnnunci(){
   document.getElementById('topAct').innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">I miei annunci</button>
-      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">Annunci live ↗</button>
-      ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋ Aggiungi</button>`:''}
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button class="btn ${annunciTab==='portali'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='portali';vAnnunci()">🖥 Portali live</button>
+      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">📋 Riepilogo live</button>
+      <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei annunci</button>
+      ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋</button>`:''}
     </div>`;
+  if(annunciTab==='portali'){ renderPortaliFinestre(); return; }
   if(annunciTab==='live'){ caricaAnnunciLive(); return; }
   const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
   document.getElementById('view').innerHTML=`
@@ -707,10 +858,86 @@ function vAnnunci(){
 }
 function annToLead(id){
   const a=annunci.find(x=>x.id===id);
-  leads.push({id:uid(),nome:`Annuncio ${a.tipo} ${a.zona}`,zona:a.zona,tel:'',fonte:a.agenzia,fase:'contatto',
+  leads.push({id:uid(),nome:`Annuncio ${a.tipo} ${a.zona}`,zona:a.zona,tel:'',fonte:a.agenzia,fase:'valutazione',
     note:`Da annuncio: ${a.mq}mq, ${eur(a.prezzo)}, stato ${a.stato}`,createdAt:new Date().toISOString()});
-  persist();alert('Lead creato nella pipeline di acquisizione!');
+  persist();alert('Lead creato nella pipeline acquisizione!');
 }
+
+/* --- Finestre portali embedded --- */
+const PORTALI_CFG=[
+  {id:'immobiliare',nome:'Immobiliare.it',color:'#e8392a',icon:'🏠',
+   url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/'},
+  {id:'idealista',nome:'Idealista',color:'#006699',icon:'🔍',
+   url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/'},
+  {id:'casa',nome:'Casa.it',color:'#ff6633',icon:'🏡',
+   url:'https://www.casa.it/vendita/residenziale/busto-arsizio/'},
+  {id:'wikicasa',nome:'Wikicasa',color:'#28a745',icon:'📊',
+   url:'https://www.wikicasa.it/vendita-case/busto-arsizio/'}
+];
+let _portaleCur='immobiliare';
+function renderPortaliFinestre(){
+  document.getElementById('view').innerHTML=`
+    <div class="note" style="margin-bottom:16px">
+      🖥 I portali si aprono direttamente qui sotto attraverso il server CasaBusto. Se un sito non si carica clicca <b>Apri nel browser</b>.
+    </div>
+    <div class="tool-tabs" style="margin-bottom:14px">
+      ${PORTALI_CFG.map(p=>`
+        <button id="ptab_${p.id}" class="${p.id===_portaleCur?'on':''}"
+          onclick="switchPortale('${p.id}')" style="${p.id===_portaleCur?`border-bottom:2.5px solid ${p.color}`:''}"
+        >${p.icon} ${p.nome}</button>`).join('')}
+    </div>
+    <div id="portaleWrap" class="portal-frame-wrap">
+      <div id="portaleLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--paper);z-index:2">
+        <div style="font-size:32px">⏳</div>
+        <div style="font-weight:600">Caricamento portale…</div>
+        <div style="font-size:12.5px;color:var(--muted)">Connessione al portale in corso</div>
+      </div>
+      <iframe id="portaleFrame" style="width:100%;height:680px;border:none;display:block"
+        onload="portaleLoaded()" onerror="portaleError()"></iframe>
+    </div>
+    <div id="portaleActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
+  loadPortale(_portaleCur);
+}
+function switchPortale(id){
+  _portaleCur=id;
+  // Aggiorna tab buttons
+  PORTALI_CFG.forEach(p=>{
+    const b=document.getElementById('ptab_'+p.id);
+    if(b){
+      b.classList.toggle('on',p.id===id);
+      b.style.borderBottom=p.id===id?`2.5px solid ${p.color}`:'';
+    }
+  });
+  loadPortale(id);
+}
+function loadPortale(id){
+  const p=PORTALI_CFG.find(x=>x.id===id);
+  if(!p)return;
+  const frame=document.getElementById('portaleFrame');
+  const loading=document.getElementById('portaleLoading');
+  const actions=document.getElementById('portaleActions');
+  if(!frame)return;
+  if(loading){loading.style.display='flex';loading.innerHTML=`<div style="font-size:32px">${p.icon}</div><div style="font-weight:600">Caricamento ${p.nome}…</div><div style="font-size:12.5px;color:var(--muted)">Connessione in corso</div>`;}
+  frame.src='/api/frame?url='+encodeURIComponent(p.url)+'&t='+Date.now();
+  if(actions) actions.innerHTML=`<a href="${p.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${p.nome} nel browser ↗</a>
+    <span style="font-size:12px;color:var(--muted)">Naviga nel portale — i link si aprono in nuova scheda</span>`;
+  // Timeout: se non carica in 12 sec mostra errore
+  clearTimeout(window._portaleTimer);
+  window._portaleTimer=setTimeout(()=>{
+    if(loading&&loading.style.display!=='none'){
+      loading.innerHTML=`<div style="font-size:40px">🔒</div>
+        <div style="font-weight:600;margin-top:10px">Sito non accessibile in anteprima</div>
+        <div style="font-size:12.5px;color:var(--muted);max-width:360px;line-height:1.5;text-align:center;margin-top:6px">${p.nome} blocca l'accesso diretto. Usa il link qui sotto.</div>
+        <a href="${p.url}" target="_blank" class="btn btn-p btn-sm" style="margin-top:14px;text-decoration:none">Apri ${p.nome} ↗</a>`;
+    }
+  },12000);
+}
+function portaleLoaded(){
+  const loading=document.getElementById('portaleLoading');
+  if(loading)loading.style.display='none';
+  clearTimeout(window._portaleTimer);
+}
+function portaleError(){portaleLoaded();}
 
 /* --- Annunci LIVE (RSS proxy server) --- */
 let _annunciLiveCache=null;
@@ -831,7 +1058,7 @@ function renderAnnunciLive(data){
 }
 function annuncioLiveToLead(btn){
   const {tipo,zona,mq,prezzo,fonte}=btn.dataset;
-  leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Immobiliare.it',fase:'contatto',
+  leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Immobiliare.it',fase:'valutazione',
     note:`Da ${fonte}: ${mq>0?mq+'mq, ':''}${prezzo>0?eur(+prezzo):'prezzo n.d.'}`,createdAt:new Date().toISOString()});
   persist();btn.textContent='✓ Creato';btn.disabled=true;
 }
@@ -1170,68 +1397,7 @@ function vStrum(){
     <button class="btn btn-g btn-sm" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('out').textContent);this.textContent='✓ Copiato'">Copia testo</button></div>
   </div>`;
 }
-/* ---------- AGGIORNAMENTO DATI VIA OMI GRATUITA ----------
-   Usa l'API gratuita dell'Agenzia delle Entrate (tramite 3eurotools).
-   Nessuna chiave, nessun credito: dati OMI ufficiali aggiornati semestralmente. */
-
-function vApiUpdate(){
-  const stamps=DB.load('apiStamps',{});
-  const oggi=new Date();
-  const rows=ZONE.map(z=>{
-    const d=stamps[z.n];
-    let badge='<span style="color:var(--muted);font-size:12px">mai aggiornato</span>';
-    if(d){const giorni=Math.round((oggi-new Date(d))/86400000);
-      const col=giorni>180?'var(--terra)':'var(--ok)';
-      badge=`<span style="color:${col};font-size:12px">${fmtD(d)} (${giorni}g fa)</span>`;}
-    return `<tr><td><b>${z.n}</b></td><td>${omi[z.n]} €/mq</td><td>${badge}</td></tr>`;
-  }).join('');
-  document.getElementById('view').innerHTML=`
-    <div class="card" style="margin-bottom:16px;border-color:var(--olive)">
-      <div class="sect-t"><span class="bar"></span>⟳ Aggiornamento dati OMI — Agenzia delle Entrate</div>
-      <p style="font-size:13.5px;line-height:1.6;color:var(--slate)">Dati ufficiali dell'Osservatorio del Mercato Immobiliare (OMI). Gratuiti, aggiornati semestralmente dall'Agenzia delle Entrate. Un click aggiorna tutti i quartieri.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px">
-        <button class="btn btn-p" id="btnAllZone" onclick="aggiornaTutte()">⟳ Aggiorna TUTTE le zone di Busto</button>
-        <button class="btn btn-g" onclick="vApiUpdate()">Ricarica tabella</button>
-      </div>
-      <div id="api_global_result" style="margin-top:14px"></div>
-    </div>
-    <div class="card">
-      <div class="sect-t"><span class="bar"></span>Stato per zona</div>
-      <table><thead><tr><th>Zona</th><th>Valore attuale</th><th>Ultimo aggiornamento</th></tr></thead>
-      <tbody>${rows}</tbody></table>
-      <div class="note" style="margin-top:12px">I dati OMI vengono aggiornati ogni semestre dall'Agenzia delle Entrate. Aggiorna quando vuoi: il servizio è completamente gratuito.</div>
-    </div>`;
-}
-
-async function aggiornaTutte(){
-  const btn=document.getElementById('btnAllZone');
-  const box=document.getElementById('api_global_result');
-  if(btn){ btn.disabled=true; btn.textContent='Aggiornamento in corso…'; }
-  if(box) box.innerHTML=`<div class="note">Recupero dati OMI da Agenzia delle Entrate…</div>`;
-  try{
-    const r=await fetch('/api/omi',{credentials:'same-origin',headers:authHeaders()});
-    if(r.status===401){ throw new Error('sessione scaduta'); }
-    const resp=await r.json();
-    if(!resp.ok) throw new Error(resp.error||'errore API');
-    const today=new Date().toISOString().slice(0,10);
-    const stamps=DB.load('apiStamps',{});
-    let aggiornate=0;
-    for(const [quartiere, dati] of Object.entries(resp.data)){
-      omi[quartiere]=Math.round(dati.med);
-      stamps[quartiere]=today;
-      aggiornate++;
-    }
-    persist(); DB.save('apiStamps',stamps);
-    if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
-    vApiUpdate();
-    const b=document.getElementById('api_global_result');
-    if(b) b.innerHTML=`<div class="note" style="border-color:var(--ok);background:#eef5ee;color:var(--olive)">✓ Aggiornate <b>${aggiornate}</b> zone con dati OMI ufficiali. Fonte: ${resp.fonte}.</div>`;
-  }catch(e){
-    if(btn){ btn.disabled=false; btn.textContent='⟳ Aggiorna TUTTE le zone di Busto'; }
-    const b=document.getElementById('api_global_result');
-    if(b) b.innerHTML=`<div class="note" style="border-color:var(--terra);color:var(--terra-d)">Errore: ${e.message}${e.message==='sessione scaduta'?' — rifai il login':''}</div>`;
-  }
-}
+// vApiUpdate rimossa — ora integrata in vMercato (tab Quotazioni live + aggiornaTutte)
 
 
 function genText(){
@@ -1540,32 +1706,25 @@ function toggleCatastoLayer(show){
    ================================================================ */
 function leadScore(lead){
   let s=40;
-  // Valore zona (più alto = più interessante)
   const v=omi[lead.zona]||1500;
   s+=v>1900?18:v>1700?12:v>1500?6:0;
-  // Qualità fonte
   s+=({Referral:18,Passaparola:16,Cartello:12,Sopralluogo:14,Web:6}[lead.fonte]||4);
-  // Fase pipeline
-  s+=({contatto:0,appuntamento:12,valutazione:20,mandato:30}[lead.fase]||0);
-  // Anzianità: penalità se fermo da troppo
+  s+=({valutazione:20,mandato:30}[lead.fase]||0);
   if(lead.createdAt){
     const gg=Math.floor((Date.now()-new Date(lead.createdAt))/86400000);
-    if(gg>60&&lead.fase==='contatto')s-=20;
-    else if(gg>30&&lead.fase==='contatto')s-=10;
+    if(gg>60&&lead.fase==='valutazione')s-=20;
+    else if(gg>30&&lead.fase==='valutazione')s-=10;
     else if(gg<5)s+=8;
   }
   return Math.max(0,Math.min(100,Math.round(s)));
 }
 function scoreColor(s){return s>=70?'var(--ok)':s>=45?'var(--warn)':'var(--terra)';}
-function scoreLabel(s){return s>=70?'Alta priorità':s>=45?'Media priorità':'Da riattivare';}
 function suggerisciAzione(lead){
   const gg=lead.createdAt?Math.floor((Date.now()-new Date(lead.createdAt))/86400000):0;
-  if(lead.fase==='contatto'&&gg>14)return'📞 Richiama — fermo da '+gg+' giorni';
-  if(lead.fase==='contatto')return'📞 Fissa un appuntamento';
-  if(lead.fase==='appuntamento')return'📋 Prepara la valutazione scritta';
+  if(lead.fase==='valutazione'&&gg>21)return'⚠️ Fermo da '+gg+' giorni — richiama!';
   if(lead.fase==='valutazione')return'✍️ Proponi il mandato';
   if(lead.fase==='mandato')return'🏠 Avvia il piano di vendita';
-  return'📞 Contatta';
+  return'📋 Aggiorna stato';
 }
 
 /* ================================================================
@@ -1584,7 +1743,7 @@ function vAcq(){
     <div class="grid g4" style="margin-bottom:18px">
       ${stat('Lead totali',totLead,'nel sistema','↑')}
       ${stat('Mandati ottenuti',conversion,'conversioni riuscite','✔')}
-      ${stat('Tasso conversione',tassoConv+'%','dal primo contatto','%')}
+      ${stat('Tasso conversione',tassoConv+'%','valutazione → mandato','%')}
       ${stat('Da riattivare',urgenti,'sotto soglia priorità','⚠')}
     </div>
     <div class="note" style="margin-bottom:18px">💡 <b>Suggerimento attivo:</b> ${suggerimento()}</div>
@@ -1604,7 +1763,7 @@ function vAcq(){
           <div class="score-bar"><div class="score-bar-fill" style="width:${l._score}%;background:${scoreColor(l._score)}"></div></div>
           <div style="font-size:11px;font-weight:600;color:${scoreColor(l._score)};margin-top:6px">${suggerisciAzione(l)}</div>
           <div class="mv">
-            ${k!=='contatto'?`<button onclick="moveLead('${l.id}',-1)">← Indietro</button>`:''}
+            ${k!==FASI[0][0]?`<button onclick="moveLead('${l.id}',-1)">← Indietro</button>`:''}
             ${k!=='mandato'?`<button onclick="moveLead('${l.id}',1)">Avanza →</button>`:''}
             <button onclick="modalLead('${l.id}')">✎</button>
             <button onclick="delItem('leads','${l.id}')">✕</button>
@@ -1688,15 +1847,16 @@ function vProspecting(){
 }
 
 function pianoAzione(analisi){
-  const urgenti=leads.filter(l=>leadScore(l)<45&&l.fase!=='mandato');
-  const appuntamenti=leads.filter(l=>l.fase==='appuntamento');
+  const urgenti=leads.filter(l=>leadScore(l)<45&&l.fase==='valutazione');
   const valutazioni=leads.filter(l=>l.fase==='valutazione');
   const top=analisi[0];
-  let piano=`<b>Lunedì — Riattivazione</b><br>`;
-  if(urgenti.length)piano+=`Richiama ${urgenti.length} lead inattivi: ${urgenti.slice(0,3).map(l=>l.nome).join(', ')}${urgenti.length>3?'…':''}.<br><br>`;
-  else piano+=`Tutti i lead sono attivi, ottimo!<br><br>`;
-  piano+=`<b>Martedì/Mercoledì — Appuntamenti</b><br>`;
-  if(appuntamenti.length)piano+=`${appuntamenti.length} lead in fase appuntamento da seguire: ${appuntamenti.map(l=>l.nome).join(', ')}.<br><br>`;
+  let piano=`<b>Priorità settimana</b><br>`;
+  if(urgenti.length)piano+=`Riattiva ${urgenti.length} lead fermi: ${urgenti.slice(0,3).map(l=>l.nome).join(', ')}${urgenti.length>3?'…':''}.<br><br>`;
+  else piano+=`Tutti i lead sono attivi — ottimo!<br><br>`;
+  piano+=`<b>Conversione</b><br>`;
+  if(valutazioni.length)piano+=`${valutazioni.length} lead in valutazione da portare al mandato: ${valutazioni.map(l=>l.nome).join(', ')}.<br><br>`;
+  const _appuntamenti_placeholder=[];//legacy
+  if(_appuntamenti_placeholder.length)piano+=``;
   else piano+=`Nessun appuntamento in agenda, prospecta nuovi contatti.<br><br>`;
   piano+=`<b>Giovedì — Valutazioni</b><br>`;
   if(valutazioni.length)piano+=`Prepara le valutazioni scritte per: ${valutazioni.map(l=>l.nome).join(', ')}.<br><br>`;
@@ -1705,54 +1865,327 @@ function pianoAzione(analisi){
   return piano;
 }
 
-/* ---------- LOGIN / SESSIONE (versione Pro con server) ---------- */
+/* ================================================================
+   INCARICHI — mandati attivi + analisi foto AI
+   ================================================================ */
+function vIncarichi(){
+  document.getElementById('topAct').innerHTML=`
+    <button class="btn btn-p" onclick="cur='immobili';updateNav();render()">＋ Immobile</button>`;
+  const mandati=immobili.filter(i=>i.stato==='mandato');
+  const valore=mandati.reduce((s,i)=>s+(+i.prezzo||0),0);
+  const aiOk=mandati.filter(i=>i.aiAnalisi).length;
+  document.getElementById('view').innerHTML=`
+    <div class="grid g3" style="margin-bottom:22px">
+      ${stat('Incarichi attivi',mandati.length,'immobili in mandato','✍')}
+      ${stat('Valore portafoglio',eur(valore),'prezzo richiesto totale','€')}
+      ${stat('Analisi AI completate',aiOk,'su '+mandati.length+' incarichi','🤖')}
+    </div>
+    ${mandati.length?`<div class="grid g2">${mandati.map(incaricoCard).join('')}</div>`
+      :`<div class="card"><div class="empty">Nessun incarico in mandato.<br>
+        <span style="font-size:12px">Aggiungi immobili con stato "In mandato" nella sezione <b>Immobili</b>.</span>
+        <div style="margin-top:14px"><button class="btn btn-p btn-sm" onclick="cur='immobili';updateNav();render()">Apri Immobili →</button></div>
+        </div></div>`}`;
+}
+
+function incaricoCard(imm){
+  const mqVal=imm.mq&&imm.prezzo?Math.round(imm.prezzo/imm.mq):0;
+  const oBase=omi[imm.zona]||MERCATO.mediaCitta;
+  const diff=oBase&&mqVal?Math.round((mqVal-oBase)/oBase*100):null;
+  const ai=imm.aiAnalisi;
+  const vendib=ai?.vendibilita?.percentuale??null;
+  const fuori=ai?.analisi_prezzo?.fuori_prezzo_percentuale??null;
+  const dir=ai?.analisi_prezzo?.direzione||'';
+  const diffColor=diff===null?'var(--muted)':diff>15?'var(--terra)':diff>5?'var(--warn)':'var(--ok)';
+  return `<div class="card" style="display:flex;flex-direction:column;gap:14px">
+    <!-- foto strip -->
+    <div id="fstrip_${imm.id}" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:5px;background:var(--paper);border-radius:9px;padding:7px;border:1px solid var(--line);min-height:54px">
+      ${(imm.foto||[]).map(f=>`<img src="${f}" style="width:100%;height:60px;object-fit:cover;border-radius:6px;cursor:pointer"
+        onclick="openM('<img src=\\'${f}\\' style=\\'max-width:100%;border-radius:10px\\'><div class=\\"modal-foot\\"><button class=\\"btn btn-g\\" onclick=\\"closeM()\\">Chiudi</button></div>')">`).join('')
+        ||'<div style="width:100%;text-align:center;padding:10px 0;font-size:12px;color:var(--muted);grid-column:1/-1">Nessuna foto — carica immagini per l\'analisi AI</div>'}
+    </div>
+    <!-- intestazione -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div>
+        <div style="font-family:'Fraunces',serif;font-size:18px;font-weight:600">${imm.tipo}</div>
+        <div style="font-size:12.5px;color:var(--muted)">${imm.zona}${imm.ind?' · '+imm.ind:''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:17px;font-weight:700;color:var(--terra)">${eur(imm.prezzo)}</div>
+        <div style="font-size:11px;color:var(--muted)">${imm.mq} mq${mqVal?' · '+mqVal+' €/mq':''}</div>
+      </div>
+    </div>
+    <!-- KPI prezzatura -->
+    <div class="grid g3" style="gap:8px">
+      <div style="background:var(--paper);border-radius:9px;padding:9px;text-align:center;border:1px solid var(--line)">
+        <div style="font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em">OMI zona</div>
+        <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;margin-top:2px">${oBase}</div>
+        <div style="font-size:10px;color:var(--muted)">€/mq</div>
+      </div>
+      <div style="background:${diff===null?'var(--paper)':diff>10?'var(--terra-l)':'var(--ok-l)'};border-radius:9px;padding:9px;text-align:center;border:1px solid ${diff===null?'var(--line)':diff>10?'var(--terra)':'#8fcd9f'}">
+        <div style="font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em">Fuori OMI</div>
+        <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:${diffColor};margin-top:2px">${diff===null?'—':(diff>0?'+':'')+diff+'%'}</div>
+        <div style="font-size:10px;color:var(--muted)">${diff===null?'—':diff>0?'sopra':'sotto'}</div>
+      </div>
+      ${vendib!==null?`
+      <div style="background:${vendib>=70?'var(--ok-l)':vendib>=40?'var(--warn-l)':'var(--terra-l)'};border-radius:9px;padding:9px;text-align:center;border:1px solid ${vendib>=70?'#8fcd9f':vendib>=40?'#e5c870':'var(--terra)'}">
+        <div style="font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em">Vendibilità AI</div>
+        <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:${vendib>=70?'var(--ok)':vendib>=40?'var(--warn)':'var(--terra)'};margin-top:2px">${vendib}%</div>
+        <div style="font-size:10px;color:var(--muted)">${fuori!==null?((dir==='sopra'?'⬆ ':dir==='sotto'?'⬇ ':'')+fuori+'% fuori prezzo'):ai.analisi_prezzo?.tempo_stimato_vendita||''}</div>
+      </div>`:`
+      <div style="background:var(--paper);border-radius:9px;padding:9px;text-align:center;border:1px dashed var(--line)">
+        <div style="font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.07em">Vendibilità AI</div>
+        <div style="font-size:13px;color:var(--muted);margin-top:6px">Non analizzato</div>
+      </div>`}
+    </div>
+    <!-- note AI -->
+    ${ai?`<div style="background:var(--paper);border-radius:9px;padding:11px;border:1px solid var(--line);font-size:12.5px;line-height:1.5">
+      <span class="ai-badge">🤖 AI</span>
+      <span style="margin-left:8px;font-weight:600">Stato ${ai.stato_conservativo?.voto||'?'}/10 · ${ai.stato_conservativo?.descrizione||''}</span>
+      ${ai.piano_azione?`<div style="color:var(--slate);margin-top:5px">${ai.piano_azione}</div>`:''}
+    </div>`:''}
+    <!-- azioni -->
+    <div style="display:flex;gap:7px;flex-wrap:wrap;margin-top:auto">
+      <label class="btn btn-g btn-sm" style="cursor:pointer;gap:5px">
+        📷 Carica foto
+        <input type="file" multiple accept="image/jpeg,image/png,image/webp" style="display:none"
+          onchange="uploadFotoIncarico('${imm.id}',this)">
+      </label>
+      <button class="btn btn-p btn-sm" onclick="analizzaConAI('${imm.id}')"
+        ${(imm.foto||[]).length?'':'title="Carica prima almeno una foto"'}>
+        🤖 Analisi AI${ai?' (aggiorna)':''}
+      </button>
+      ${ai?`<button class="btn btn-g btn-sm" onclick="showAIResultsModal(immobili.find(i=>i.id==='${imm.id}'),immobili.find(i=>i.id==='${imm.id}').aiAnalisi)">📊 Risultati</button>`:''}
+      <button class="btn btn-g btn-sm" onclick="modalImmobile('${imm.id}')">✎ Modifica</button>
+    </div>
+  </div>`;
+}
+
+async function uploadFotoIncarico(id,input){
+  const imm=immobili.find(i=>i.id===id);
+  if(!imm)return;
+  if(!imm.foto)imm.foto=[];
+  const files=[...input.files];
+  for(const file of files){
+    await new Promise(res=>{
+      // Comprimi prima di salvare
+      const img=new Image();
+      const url=URL.createObjectURL(file);
+      img.onload=()=>{
+        const canvas=document.createElement('canvas');
+        const maxW=1200;
+        const ratio=Math.min(maxW/img.width,1);
+        canvas.width=Math.round(img.width*ratio);
+        canvas.height=Math.round(img.height*ratio);
+        canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+        imm.foto.push(canvas.toDataURL('image/jpeg',0.78));
+        URL.revokeObjectURL(url);
+        res();
+      };
+      img.src=url;
+    });
+  }
+  persist();
+  // Aggiorna strip foto senza ridisegnare tutto
+  const strip=document.getElementById('fstrip_'+id);
+  if(strip) strip.innerHTML=imm.foto.map(f=>`<img src="${f}" style="width:100%;height:60px;object-fit:cover;border-radius:6px">`).join('');
+}
+
+async function analizzaConAI(id){
+  const imm=immobili.find(i=>i.id===id);
+  if(!imm)return;
+  if(!(imm.foto||[]).length){
+    openM(`<h2>📷 Foto richieste</h2>
+      <p style="color:var(--muted);font-size:14px">Carica almeno una foto dell'immobile prima di avviare l'analisi AI.</p>
+      <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">OK</button></div>`);
+    return;
+  }
+  openM(`<div style="text-align:center;padding:32px 20px">
+    <div style="font-size:48px;margin-bottom:16px">🤖</div>
+    <h2>Analisi AI in corso…</h2>
+    <p style="color:var(--muted);font-size:14px;line-height:1.6">Analisi di <b>${imm.foto.length} foto</b> con Claude AI.<br>Elaborazione: 20-40 secondi.</p>
+    <div style="margin-top:20px;background:var(--paper);border-radius:10px;padding:12px;font-size:12.5px;color:var(--slate)">
+      ${imm.tipo} · ${imm.zona} · ${imm.mq} mq · ${eur(imm.prezzo)}
+    </div>
+  </div>`);
+  try{
+    const immagini=imm.foto.map(f=>({
+      mime:f.split(';')[0].split(':')[1]||'image/jpeg',
+      data:f.split(',')[1]
+    }));
+    const r=await fetch('/api/analizza-foto',{
+      method:'POST',credentials:'same-origin',
+      headers:{...authHeaders(),'Content-Type':'application/json'},
+      body:JSON.stringify({immagini,zona:imm.zona,mq:imm.mq,tipo:imm.tipo,
+        prezzoRichiesto:imm.prezzo,note:imm.note||''})
+    });
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||'Errore '+r.status);}
+    const d=await r.json();
+    imm.aiAnalisi=d.analisi;
+    persist();
+    showAIResultsModal(imm,d.analisi);
+    // Ricarica la card aggiornata
+    setTimeout(()=>vIncarichi(),100);
+  }catch(e){
+    const isConfig=e.message.includes('ANTHROPIC_API_KEY')||e.message.includes('non attiva');
+    openM(`<h2>⚠️ Errore analisi</h2>
+      <p style="color:var(--terra);font-size:14px">${e.message}</p>
+      ${isConfig?`<div class="note" style="margin-top:14px">
+        Per attivare l'analisi AI aggiungi <b>ANTHROPIC_API_KEY=sk-ant-...</b> nel file <b>.env</b> e riavvia il server.<br>
+        Ottieni la chiave su <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+      </div>`:''}
+      <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Chiudi</button></div>`);
+  }
+}
+
+function showAIResultsModal(imm,a){
+  if(!a){openM(`<h2>Errore</h2><p>Dati non disponibili.</p><div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Chiudi</button></div>`);return;}
+  if(a.error&&!a.stima_valore){
+    openM(`<h2>Analisi parziale</h2><pre style="font-size:11px;overflow:auto;max-height:300px">${a.raw||a.error}</pre>
+      <div class="modal-foot"><button class="btn btn-g" onclick="closeM()">Chiudi</button></div>`);
+    return;
+  }
+  const voto=a.stato_conservativo?.voto||5;
+  const vendib=a.vendibilita?.percentuale||0;
+  const fuori=a.analisi_prezzo?.fuori_prezzo_percentuale||0;
+  const dir=a.analisi_prezzo?.direzione||'allineato';
+  const stima=a.stima_valore?.totale_stimato||0;
+  const consigliato=a.analisi_prezzo?.prezzo_consigliato||stima;
+  openM(`
+    <div style="max-height:82vh;overflow-y:auto;padding-right:4px">
+      <h2 style="margin-bottom:16px">🤖 Analisi AI — ${imm.tipo} · ${imm.zona}</h2>
+      <div class="grid g3" style="margin-bottom:16px;gap:10px">
+        <div style="background:${voto>=7?'var(--ok-l)':voto>=5?'var(--warn-l)':'var(--terra-l)'};border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Stato conservativo</div>
+          <div style="font-family:'Fraunces',serif;font-size:40px;font-weight:600;color:${voto>=7?'var(--ok)':voto>=5?'var(--warn)':'var(--terra)'};margin:6px 0">${voto}<span style="font-size:20px">/10</span></div>
+          <div style="font-size:11.5px;color:var(--muted)">${a.classe_qualitativa||''}</div>
+        </div>
+        <div style="background:${vendib>=70?'var(--ok-l)':vendib>=40?'var(--warn-l)':'var(--terra-l)'};border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Vendibilità</div>
+          <div style="font-family:'Fraunces',serif;font-size:40px;font-weight:600;color:${vendib>=70?'var(--ok)':vendib>=40?'var(--warn)':'var(--terra)'};margin:6px 0">${vendib}%</div>
+          <div style="font-size:11.5px;color:var(--muted)">${a.vendibilita?.tempo_stimato_vendita||''}</div>
+        </div>
+        <div style="background:${dir==='allineato'?'var(--ok-l)':'var(--terra-l)'};border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.08em">Fuori prezzo</div>
+          <div style="font-family:'Fraunces',serif;font-size:40px;font-weight:600;color:${dir==='allineato'?'var(--ok)':'var(--terra)'};margin:6px 0">${dir==='sopra'?'+':''}${fuori}%</div>
+          <div style="font-size:11.5px;color:var(--muted)">${dir} mercato</div>
+        </div>
+      </div>
+      <!-- Stima valore -->
+      <div class="card" style="text-align:center;margin-bottom:14px;padding:18px">
+        <div style="font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700">Valore di mercato stimato AI</div>
+        <div style="font-family:'Fraunces',serif;font-size:38px;font-weight:600;color:var(--terra);margin:8px 0">${eur(stima)}</div>
+        <div style="font-size:13px;color:var(--slate)">${a.stima_valore?.euro_al_mq||0} €/mq · ${a.stima_valore?.motivazione||''}</div>
+        ${consigliato&&consigliato!==stima?`<div style="font-size:13.5px;margin-top:8px;color:var(--ok);font-weight:600">Prezzo consigliato: ${eur(consigliato)}</div>`:''}
+        ${imm.prezzo?`<div style="font-size:12px;color:var(--muted);margin-top:4px">Prezzo richiesto: ${eur(imm.prezzo)} → scostamento: ${Math.round((imm.prezzo-stima)/stima*100)>0?'+':''}${Math.round((imm.prezzo-stima)/stima*100)}%</div>`:''}
+      </div>
+      <!-- Punti forza e criticità -->
+      <div class="grid g2" style="margin-bottom:14px;gap:10px">
+        <div class="card" style="padding:14px">
+          <div style="font-weight:700;margin-bottom:8px;color:var(--ok)">✓ Punti di forza</div>
+          ${(a.punti_forza||[]).map(p=>`<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--line);color:var(--slate)">+ ${p}</div>`).join('')||'<div style="color:var(--muted);font-size:13px">—</div>'}
+        </div>
+        <div class="card" style="padding:14px">
+          <div style="font-weight:700;margin-bottom:8px;color:var(--terra)">✗ Criticità</div>
+          ${(a.criticita||[]).map(c=>`<div style="font-size:13px;padding:4px 0;border-bottom:1px solid var(--line);color:var(--slate)">− ${c}</div>`).join('')||'<div style="color:var(--muted);font-size:13px">—</div>'}
+        </div>
+      </div>
+      <!-- Piano azione -->
+      ${a.piano_azione?`<div class="note"><b>Piano d'azione consigliato:</b> ${a.piano_azione}</div>`:''}
+      <!-- Descrizione vendibilità -->
+      ${a.vendibilita?.spiegazione?`<div style="background:var(--paper);border-radius:10px;padding:12px;border:1px solid var(--line);font-size:12.5px;line-height:1.6;color:var(--slate);margin-top:12px"><b>Analisi vendibilità:</b> ${a.vendibilita.spiegazione}</div>`:''}
+      ${a.analisi_prezzo?.nota?`<div style="background:var(--paper);border-radius:10px;padding:12px;border:1px solid var(--line);font-size:12.5px;line-height:1.6;color:var(--slate);margin-top:10px"><b>Posizionamento prezzo:</b> ${a.analisi_prezzo.nota}</div>`:''}
+      <div class="modal-foot">
+        <button class="btn btn-g" onclick="closeM()">Chiudi</button>
+      </div>
+    </div>`);
+}
+
+/* ---------- MENU HAMBURGER ---------- */
+let _menuOpen=false;
+function toggleMenu(){
+  _menuOpen=!_menuOpen;
+  document.getElementById('side').classList.toggle('open',_menuOpen);
+  document.getElementById('sideOv').classList.toggle('show',_menuOpen);
+}
+function closeMenu(){
+  _menuOpen=false;
+  document.getElementById('side').classList.remove('open');
+  document.getElementById('sideOv').classList.remove('show');
+}
+
+/* ---------- LOGIN / SESSIONE ---------- */
 let APP_TOKEN = sessionStorage.getItem('cb_token') || null;
 function authHeaders(extra){
-  const h = Object.assign({}, extra||{});
-  if(APP_TOKEN) h['X-App-Token'] = APP_TOKEN;
+  const h=Object.assign({},extra||{});
+  if(APP_TOKEN) h['X-App-Token']=APP_TOKEN;
   return h;
 }
 async function checkSession(){
   try{
     const r=await fetch('/api/me',{credentials:'same-origin',headers:authHeaders()});
     const d=await r.json();
-    if(d.authed){ showApp(); } else { showLogin(); }
+    if(d.authed){ showApp(true); } else { showLogin(); }
   }catch(e){
     showLogin();
-    document.getElementById('lg_err').textContent='Server non raggiungibile. Avvia il server e ricarica.';
+    document.getElementById('lg_err').textContent='Server non raggiungibile.';
   }
 }
 function showLogin(){
-  document.getElementById('loginOverlay').style.display='flex';
+  document.getElementById('loginOverlay').style.cssText='display:flex;opacity:1;transform:scale(1)';
   document.getElementById('appRoot').style.display='none';
   setTimeout(()=>{const p=document.getElementById('lg_pass');if(p)p.focus();},100);
 }
-function showApp(){
-  document.getElementById('loginOverlay').style.display='none';
-  document.getElementById('appRoot').style.display='grid';
-  render();
+function showApp(instant){
+  const overlay=document.getElementById('loginOverlay');
+  const root=document.getElementById('appRoot');
+  cur='mappa3d'; updateNav();
+  if(instant){
+    overlay.style.display='none';
+    root.style.display='block';
+    render();
+    return;
+  }
+  // Animazione: la mappa 3D parte in background mentre il login svanisce
+  root.style.cssText='display:block;opacity:0';
+  render(); // avvia caricamento mappa in background
+  // Fade out login
+  overlay.style.transition='opacity .55s ease,transform .55s ease';
+  overlay.style.opacity='0';
+  overlay.style.transform='scale(1.06)';
+  setTimeout(()=>{
+    overlay.style.display='none';
+    root.style.transition='opacity .4s ease';
+    root.style.opacity='1';
+  },520);
 }
 async function doLogin(){
   const user=document.getElementById('lg_user').value.trim();
   const pass=document.getElementById('lg_pass').value;
   const err=document.getElementById('lg_err');
+  const btn=document.querySelector('#loginOverlay button.btn-p');
   err.textContent='';
+  if(btn){btn.disabled=true;btn.textContent='Accesso…';}
   try{
-    const r=await fetch('/api/login',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username:user,password:pass})});
+    const r=await fetch('/api/login',{method:'POST',credentials:'same-origin',
+      headers:{'Content-Type':'application/json'},body:JSON.stringify({username:user,password:pass})});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
-      if(d.token){ APP_TOKEN=d.token; sessionStorage.setItem('cb_token',d.token); }
+      if(d.token){APP_TOKEN=d.token;sessionStorage.setItem('cb_token',d.token);}
       document.getElementById('lg_pass').value='';
-      showApp();
+      showApp(false);
+    } else {
+      const d=await r.json().catch(()=>({}));
+      err.textContent=d.error==='credenziali non valide'?'Nome utente o password errati.':'Accesso non riuscito.';
+      if(btn){btn.disabled=false;btn.textContent='Entra';}
     }
-    else { const d=await r.json().catch(()=>({})); err.textContent=d.error==='credenziali non valide'?'Nome utente o password errati.':'Accesso non riuscito.'; }
-  }catch(e){ err.textContent='Server non raggiungibile.'; }
+  }catch(e){
+    err.textContent='Server non raggiungibile.';
+    if(btn){btn.disabled=false;btn.textContent='Entra';}
+  }
 }
 async function doLogout(){
-  try{ await fetch('/api/logout',{method:'POST',credentials:'same-origin',headers:authHeaders()}); }catch(e){}
-  APP_TOKEN=null; sessionStorage.removeItem('cb_token');
-  showLogin();
+  try{await fetch('/api/logout',{method:'POST',credentials:'same-origin',headers:authHeaders()});}catch(e){}
+  APP_TOKEN=null; sessionStorage.removeItem('cb_token'); showLogin();
 }
 
 checkSession();

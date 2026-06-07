@@ -12,7 +12,8 @@
     "express": "^4.19.2",
     "express-session": "^1.18.0",
     "bcryptjs": "^2.4.3",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "@anthropic-ai/sdk": "^0.30.0"
   },
   "engines": {
     "node": ">=18"

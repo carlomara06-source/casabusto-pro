@@ -881,11 +881,9 @@ function vApiUpdate(){
 async function fetchZona(zona){
   const z=ZONE.find(x=>x.n===zona); if(!z) throw new Error('zona sconosciuta');
   const payload={
-    address: `${zona}, Busto Arsizio VA`,
-    citta: "Busto Arsizio",
-    provincia: "VA",
-    regione: "Lombardia",
-    coordinate: { lat: z.lat, lng: z.lng }
+    address: `${zona}, Busto Arsizio, VA`,
+    for: "sale",
+    type: 1
   };
   const r=await fetch('/api/openapi',{method:'POST',credentials:'same-origin',headers:authHeaders({'Content-Type':'application/json'}),
     body:JSON.stringify({endpoint:API_ENDPOINT, method:'POST', payload})});

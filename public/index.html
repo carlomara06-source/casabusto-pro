@@ -157,9 +157,20 @@ tr:hover td{background:var(--terra-l)}
 @keyframes mapFadeIn{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
 .app-enter{animation:mapFadeIn .7s cubic-bezier(.4,0,.2,1) both}
 
-/* ── PORTAL FRAME ── */
-.portal-frame-wrap{border-radius:14px;border:1px solid var(--line);overflow:hidden;background:var(--paper);position:relative}
-.portal-frame-wrap iframe{display:block;width:100%;height:680px;border:none}
+/* ── VIEW TRANSITION ── */
+@keyframes vFadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
+#view{animation:vFadeIn .22s ease both}
+
+/* ── PORTAL LINK CARDS ── */
+.portal-link-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px}
+.portal-link-card{background:var(--card);border:1.5px solid var(--line);border-radius:14px;padding:18px 20px;display:flex;flex-direction:column;gap:8px;transition:box-shadow var(--t),border-color var(--t),transform .15s;cursor:pointer}
+.portal-link-card:hover{box-shadow:var(--sh-lg);border-color:var(--line-2);transform:translateY(-2px)}
+.portal-link-card .pl-top{display:flex;align-items:center;gap:10px}
+.portal-link-card .pl-icon{font-size:22px;line-height:1;flex-shrink:0}
+.portal-link-card .pl-name{font-weight:700;font-size:14px;line-height:1.2}
+.portal-link-card .pl-desc{font-size:11.5px;color:var(--muted);line-height:1.45;flex:1}
+@media(max-width:900px){.portal-link-grid{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.portal-link-grid{grid-template-columns:1fr}}
 
 /* ── INCARICHI AI BADGE ── */
 .ai-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#3b5068,#1b3048);color:#e0dbd0;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.04em}
@@ -202,7 +213,6 @@ tr:hover td{background:var(--terra-l)}
       <div class="nav-sep"></div>
       <button data-v="incarichi"><span class="ic">✍</span>Incarichi</button>
       <button data-v="acquisizione"><span class="ic">↑</span>Acquisizione</button>
-      <button data-v="prospecting"><span class="ic">⊕</span>Prospecting AI</button>
       <div class="nav-sep"></div>
       <button data-v="mercato"><span class="ic">▲</span>Quotazioni zona</button>
       <button data-v="previsioni"><span class="ic">∿</span>Grafici & Previsioni</button>
@@ -255,7 +265,14 @@ const ZONE = [
 const MERCATO = {
   mediaCitta:1798, trendQuot:"+4,79% annuo", venditeAnno:1493,
   trendVendite:"+7,33% annuo", dinamicita:"Alta",
-  aggiornato:"giu 2026"
+  aggiornato:"giu 2026",
+  note:[
+    "Prezzi in salita: +4,79% annuo, crescita sostenuta da domanda stabile.",
+    "Il Centro si conferma la zona più cara (~2.004 €/mq), seguita da Tribunale (~1.900 €/mq).",
+    "Le zone periferiche (Borsano, Sacconago) offrono il miglior rapporto qualità-prezzo.",
+    "Tempi medi di vendita: 70–90 giorni per immobili correttamente valorizzati.",
+    "Domanda in crescita da famiglie con figli per zone con scuole e verde (S. Edoardo, S. Anna)."
+  ]
 };
 
 /* ---- SERIE STORICHE REALI (€/mq medio richiesta vendita) ----
@@ -351,7 +368,6 @@ const TITLES={
  dash:["Dashboard","Panoramica della tua attività a Busto Arsizio"],
  incarichi:["Incarichi","Mandati attivi · analisi AI · valore e vendibilità"],
  acquisizione:["Acquisizione","Pipeline lead: dalla valutazione al mandato"],
- prospecting:["Prospecting AI","Analisi intelligente delle zone e opportunità"],
  mercato:["Quotazioni zona","Dati OMI, portali di mercato e prezzi per quartiere"],
  previsioni:["Grafici & Previsioni","Andamento storico e scenari a 6/12 mesi"],
  annunci:["Annunci live","Portali immobiliari integrati + annunci per zona"],
@@ -377,8 +393,11 @@ function render(){
   document.getElementById('pgT').textContent=t[0];
   document.getElementById('pgD').textContent=t[1];
   document.getElementById('topAct').innerHTML='';
-  document.getElementById('view').innerHTML='';
-  ({mappa3d:vMappa3D,dash:vDash,incarichi:vIncarichi,acquisizione:vAcq,prospecting:vProspecting,
+  const view=document.getElementById('view');
+  view.innerHTML='';
+  // Ri-triggera animazione fade-in ad ogni cambio sezione
+  view.style.animation='none'; void view.offsetWidth; view.style.animation='';
+  ({mappa3d:vMappa3D,dash:vDash,incarichi:vIncarichi,acquisizione:vAcq,
     mercato:vMercato,previsioni:vPrevisioni,annunci:vAnnunci,
     immobili:vImmobili,vendite:vVendite,valutazione:vValut,agenda:vAgenda,strumenti:vStrum}[cur]||vDash)();
 }
@@ -465,118 +484,50 @@ let _mercatoTab='dati', _quotCur='borsinoQ';
 
 function vMercato(){
   document.getElementById('topAct').innerHTML=`
-    <div style="display:flex;gap:6px;flex-wrap:wrap">
-      <button class="btn ${_mercatoTab==='dati'?'btn-p':'btn-g'} btn-sm" onclick="_mercatoTab='dati';vMercato()">📊 Dati zona</button>
-      <button class="btn ${_mercatoTab==='finestre'?'btn-p':'btn-g'} btn-sm" onclick="_mercatoTab='finestre';vMercato()">🖥 Quotazioni live</button>
-      <button class="btn btn-g btn-sm" onclick="aggiornaTutte()">⟳ Aggiorna OMI</button>
-    </div>`;
-  if(_mercatoTab==='finestre'){ renderQuotazioniFinestre(); return; }
-  // --- TAB DATI ---
+    <button class="btn btn-g btn-sm" onclick="aggiornaTutte()">⟳ Aggiorna OMI</button>`;
   document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:20px">📊 Dati raccolti da <b>fonti pubbliche</b> sul mercato di Busto Arsizio. Aggiornato: <b>${MERCATO.aggiornato}</b>. Usa <b>Quotazioni live</b> per consultare i portali direttamente.</div>
     <div class="grid g4" style="margin-bottom:22px">
       ${stat('Prezzo medio città',MERCATO.mediaCitta+' €/mq','residenziale in vendita','▲')}
       ${stat('Trend quotazioni',MERCATO.trendQuot,'andamento annuo','↗')}
       ${stat('Compravendite/anno',MERCATO.venditeAnno,'residenziale ('+MERCATO.trendVendite+')','€')}
       ${stat('Dinamicità mercato',MERCATO.dinamicita,'livello attività','◆')}
     </div>
-    <div class="grid g2">
+    <div class="grid g2" style="margin-bottom:22px">
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Prezzi reali per zona (€/mq)</div>
+        <div class="sect-t"><span class="bar"></span>Prezzi per zona (€/mq)</div>
         ${barChart()}
-        <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5">Zona più cara: <b>Centro</b> (~2.004 €/mq). Più economica: <b>Sacconago/Borsano</b> (~1.479 €/mq).</div>
-        <button class="btn btn-g btn-sm" style="margin-top:14px" onclick="_mercatoTab='finestre';vMercato()">🖥 Apri quotazioni live →</button>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5">
+          Zona più cara: <b>Centro</b> (~2.004 €/mq) · Più economica: <b>Borsano</b> (~1.453 €/mq)
+        </div>
+        <div id="api_global_result"></div>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Fonti dati</div>
-        ${QUOT_FONTI.map(f=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
-          <div>
-            <div style="font-weight:700;font-size:13.5px">${f.icon} ${f.nome}</div>
-            <div style="font-size:11.5px;color:var(--muted)">${f.desc}</div>
-          </div>
-          <div style="display:flex;gap:6px">
-            <button class="btn btn-g btn-sm" onclick="_quotCur='${f.id}';_mercatoTab='finestre';vMercato()">Apri →</button>
-          </div>
-        </div>`).join('')}
-        <div id="api_global_result"></div>
+        <div class="sect-t"><span class="bar"></span>Note di mercato</div>
+        <div style="font-size:13px;color:var(--slate);line-height:1.7">
+          ${MERCATO.note.map(n=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">${n}</div>`).join('')}
+        </div>
+        <div style="font-size:11.5px;color:var(--muted);margin-top:12px">
+          Aggiornato: <b>${MERCATO.aggiornato}</b> · Fonte: OMI Agenzia delle Entrate
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="sect-t"><span class="bar"></span>Portali quotazioni — consulta le fonti</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Dati aggiornati su prezzi, trend e valutazioni per Busto Arsizio. Si aprono in una nuova scheda.</div>
+      <div class="portal-link-grid">
+        ${QUOT_FONTI.map(f=>`
+          <a href="${f.url}" target="_blank" rel="noopener noreferrer" class="portal-link-card" style="text-decoration:none;color:inherit">
+            <div class="pl-top">
+              <div class="pl-icon">${f.icon}</div>
+              <div class="pl-name" style="color:${f.color}">${f.nome}</div>
+            </div>
+            <div class="pl-desc">${f.desc}</div>
+            <div style="font-size:11px;color:var(--terra);font-weight:700;margin-top:4px">Apri ↗</div>
+          </a>`).join('')}
       </div>
     </div>`;
 }
 
-function renderQuotazioniFinestre(){
-  document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:14px">
-      🖥 Consulta le quotazioni direttamente dai portali senza uscire da CasaBusto.
-    </div>
-    <div class="tool-tabs" style="margin-bottom:14px">
-      ${QUOT_FONTI.map(f=>`
-        <button id="qtab_${f.id}" class="${f.id===_quotCur?'on':''}"
-          onclick="switchQuot('${f.id}')"
-          style="${f.id===_quotCur?`border-bottom:2.5px solid ${f.color}`:''}"
-        >${f.icon} ${f.nome}</button>`).join('')}
-    </div>
-    <div id="quotWrap" class="portal-frame-wrap">
-      <div id="quotLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:var(--paper);z-index:2">
-        <div style="font-size:32px">⏳</div>
-        <div style="font-weight:600">Caricamento quotazioni…</div>
-      </div>
-      <iframe id="quotFrame"
-        sandbox="allow-scripts allow-forms allow-popups allow-modals"
-        style="width:100%;height:680px;border:none;display:block"
-        onload="quotLoaded()" onerror="quotLoaded()"></iframe>
-    </div>
-    <div id="quotActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
-  loadQuot(_quotCur);
-}
-function switchQuot(id){
-  _quotCur=id;
-  QUOT_FONTI.forEach(f=>{
-    const b=document.getElementById('qtab_'+f.id);
-    if(b){b.classList.toggle('on',f.id===id);b.style.borderBottom=f.id===id?`2.5px solid ${f.color}`:'';}
-  });
-  loadQuot(id);
-}
-function loadQuot(id){
-  const f=QUOT_FONTI.find(x=>x.id===id);
-  if(!f)return;
-  const frame=document.getElementById('quotFrame');
-  const loading=document.getElementById('quotLoading');
-  const actions=document.getElementById('quotActions');
-  if(!frame)return;
-  clearTimeout(window._quotTimer); clearTimeout(window._quotTimer2);
-  if(loading){
-    loading.style.display='flex';
-    loading.innerHTML=`<div style="font-size:32px">${f.icon}</div>
-      <div style="font-weight:600">Caricamento ${f.nome}…</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Connessione al portale in corso</div>`;
-  }
-  frame.src='/api/frame?url='+encodeURIComponent(f.url)+'&t='+Date.now();
-  if(actions)actions.innerHTML=`<a href="${f.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${f.nome} nel browser ↗</a>`;
-  // Fase 2 — dopo 15s: avvisa che sta usando il proxy avanzato (ScraperAPI)
-  window._quotTimer=setTimeout(()=>{
-    if(loading&&loading.style.display!=='none'){
-      loading.innerHTML=`<div style="font-size:32px">🔄</div>
-        <div style="font-weight:600">Bypass anti-bot in corso…</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px">Proxy avanzato attivo — attendi circa 1 minuto</div>
-        <div style="margin-top:14px"><a href="${f.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${f.nome} direttamente ↗</a></div>`;
-    }
-  },15000);
-  // Fase 3 — dopo 75s: errore definitivo
-  window._quotTimer2=setTimeout(()=>{
-    if(loading&&loading.style.display!=='none'){
-      loading.innerHTML=`<div style="font-size:40px">🔒</div>
-        <div style="font-weight:600;margin-top:10px">Sito non embeddabile</div>
-        <div style="font-size:12px;color:var(--muted);margin-top:6px">Il portale blocca l'integrazione. Aprilo direttamente nel browser:</div>
-        <a href="${f.url}" target="_blank" class="btn btn-p btn-sm" style="margin-top:14px;text-decoration:none">Apri ${f.nome} ↗</a>`;
-    }
-  },75000);
-}
-function quotLoaded(){
-  const loading=document.getElementById('quotLoading');
-  if(loading)loading.style.display='none';
-  clearTimeout(window._quotTimer);
-  clearTimeout(window._quotTimer2);
-}
 
 /* Aggiornamento dati OMI via API 3eurotools */
 async function aggiornaTutte(){
@@ -1996,96 +1947,6 @@ function vAcq(){
     </div>`;
 }
 
-/* ================================================================
-   PROSPECTING AI — analisi zone + opportunità intelligenti
-   ================================================================ */
-function vProspecting(){
-  // Analisi per zona: mandati, lead, annunci vuoti, valore OMI
-  const analisi=ZONE.map(z=>{
-    const mandatiZona=immobili.filter(i=>i.zona===z.n&&i.stato==='mandato').length;
-    const leadZona=leads.filter(l=>l.zona===z.n&&l.fase!=='mandato').length;
-    const vuotiZona=annunci.filter(a=>a.zona===z.n&&a.stato==='vuoto').length;
-    const val=omi[z.n]||1500;
-    // Score opportunità: valore alto + poca copertura + vuoti segnalati
-    const oppScore=Math.round((val/20)-(mandatiZona*15)+(vuotiZona*10)+(leadZona>0?0:8));
-    return{...z,mandati:mandatiZona,lead:leadZona,vuoti:vuotiZona,val,oppScore};
-  }).sort((a,b)=>b.oppScore-a.oppScore);
-
-  const top3=analisi.slice(0,3);
-  const scoperte=analisi.filter(z=>z.mandati===0);
-
-  document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:20px">🤖 <b>Analisi AI delle opportunità di acquisizione</b> a Busto Arsizio. Il punteggio combina valore di mercato, copertura mandati, immobili vuoti segnalati e lead attivi per zona.</div>
-    <div class="grid g3" style="margin-bottom:22px">
-      <div class="card" style="border-color:var(--terra)">
-        <div class="sect-t"><span class="bar"></span>🎯 Zone prioritarie</div>
-        ${top3.map((z,i)=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--line)">
-          <div>
-            <div style="font-weight:700;font-size:14px">${i===0?'🥇':i===1?'🥈':'🥉'} ${z.n}</div>
-            <div style="font-size:11.5px;color:var(--muted)">${z.val} €/mq · ${z.mandati} mandati · ${z.vuoti} vuoti segnalati</div>
-          </div>
-          <div style="font-family:serif;font-size:22px;font-weight:700;color:var(--terra)">${z.oppScore}</div>
-        </div>`).join('')}
-        <div class="note" style="margin-top:12px;font-size:12px">Punteggio opportunità: più alto = zona più appetibile per nuovi incarichi.</div>
-      </div>
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>⚠️ Zone scoperte</div>
-        ${scoperte.length?scoperte.map(z=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)">
-          <div><b>${z.n}</b><div style="font-size:11.5px;color:var(--muted)">${z.val} €/mq · ${z.lead} lead attivi</div></div>
-          <button class="btn btn-p btn-sm" onclick="modalLead();document.getElementById('l_zona').value='${z.n}'">＋ Lead</button>
-        </div>`).join(''):'<div class="empty">Ottimo! Hai copertura su tutte le zone.</div>'}
-      </div>
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>📊 Mappa opportunità</div>
-        ${analisi.map(z=>{
-          const pct=Math.min(100,Math.max(0,z.oppScore));
-          const col=pct>70?'var(--terra)':pct>50?'var(--warn)':'var(--ok)';
-          return `<div class="bar-row"><div class="zn" style="font-size:12px">${z.n}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${col}">${pct}</div></div></div>`;
-        }).join('')}
-      </div>
-    </div>
-    <div class="grid g2">
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>📋 Script acquisizione per zona top</div>
-        ${top3.map(z=>`<div style="border:1px solid var(--line);border-radius:10px;padding:13px;margin-bottom:10px">
-          <div style="font-weight:700;margin-bottom:6px">${z.n} — ${z.val} €/mq</div>
-          <div style="font-size:12.5px;line-height:1.6;color:var(--slate);font-style:italic">
-            "Buongiorno, mi occupo di intermediazione immobiliare nella zona di ${z.n}.
-            In questo momento ho acquirenti realmente interessati a immobili in questa zona,
-            dove i valori si aggirano sui ${z.val} €/mq — tra i ${z.val>1700?'più alti':'migliori'} della città.
-            Sta valutando di vendere?"
-          </div>
-          <button class="btn btn-g btn-sm" style="margin-top:8px" onclick="navigator.clipboard.writeText(this.previousElementSibling.textContent.trim());this.textContent='✓ Copiato'">Copia script</button>
-        </div>`).join('')}
-      </div>
-      <div class="card">
-        <div class="sect-t"><span class="bar"></span>💡 Piano d'azione settimanale</div>
-        <div style="font-size:13.5px;line-height:1.8;color:var(--slate)">
-          ${pianoAzione(analisi)}
-        </div>
-      </div>
-    </div>`;
-}
-
-function pianoAzione(analisi){
-  const urgenti=leads.filter(l=>leadScore(l)<45&&l.fase==='valutazione');
-  const valutazioni=leads.filter(l=>l.fase==='valutazione');
-  const top=analisi[0];
-  let piano=`<b>Priorità settimana</b><br>`;
-  if(urgenti.length)piano+=`Riattiva ${urgenti.length} lead fermi: ${urgenti.slice(0,3).map(l=>l.nome).join(', ')}${urgenti.length>3?'…':''}.<br><br>`;
-  else piano+=`Tutti i lead sono attivi — ottimo!<br><br>`;
-  piano+=`<b>Conversione</b><br>`;
-  if(valutazioni.length)piano+=`${valutazioni.length} lead in valutazione da portare al mandato: ${valutazioni.map(l=>l.nome).join(', ')}.<br><br>`;
-  const _appuntamenti_placeholder=[];//legacy
-  if(_appuntamenti_placeholder.length)piano+=``;
-  else piano+=`Nessun appuntamento in agenda, prospecta nuovi contatti.<br><br>`;
-  piano+=`<b>Giovedì — Valutazioni</b><br>`;
-  if(valutazioni.length)piano+=`Prepara le valutazioni scritte per: ${valutazioni.map(l=>l.nome).join(', ')}.<br><br>`;
-  else piano+=`Nessuna valutazione pendente.<br><br>`;
-  piano+=`<b>Venerdì — Prospecting</b><br>Concentrati su <b>${top.n}</b> (punteggio ${top.oppScore}): distribuisci volantini o chiama proprietari della zona.`;
-  return piano;
-}
 
 /* ================================================================
    INCARICHI — mandati attivi + analisi foto AI

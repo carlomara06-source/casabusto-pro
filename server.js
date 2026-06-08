@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import crypto from "crypto";
+import https from "https";
 
 dotenv.config();
 
@@ -104,15 +105,46 @@ app.get("/api/omi", requireLogin, async (req,res)=>{
 });
 
 // =================== CATASTO WMS PROXY ===================
+// Agente HTTPS che accetta il certificato self-signed dell'Agenzia delle Entrate
+const _catastoAgent=new https.Agent({rejectUnauthorized:false});
+
+// Conversione EPSG:3857 (Web Mercator) → lat/lon ETRS89 per WMS EPSG:4258
+function _mercToLatLon(x,y){
+  const R=6378137;
+  return{
+    lat:(2*Math.atan(Math.exp(y/R))-Math.PI/2)*(180/Math.PI),
+    lon:x/R*(180/Math.PI)
+  };
+}
+
 app.get("/api/catasto-tile", requireLogin, async (req,res)=>{
-  const bbox=req.query.bbox;
-  if(!bbox)return res.status(400).end();
-  const p=new URLSearchParams({SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetMap",LAYERS:"CP.CadastralParcel",STYLES:"",FORMAT:"image/png",TRANSPARENT:"true",CRS:"EPSG:3857",WIDTH:"256",HEIGHT:"256",BBOX:bbox});
+  const bboxStr=req.query.bbox;
+  if(!bboxStr)return res.status(400).end();
+  // MapLibre passa {bbox-epsg-3857}: minX,minY,maxX,maxY in metri
+  const [x1,y1,x2,y2]=bboxStr.split(',').map(Number);
+  const sw=_mercToLatLon(x1,y1), ne=_mercToLatLon(x2,y2);
+  // WMS 1.3.0 + EPSG:4258: ordine assi = LAT,LON (minLat,minLon,maxLat,maxLon)
+  const bbox4258=`${sw.lat.toFixed(7)},${sw.lon.toFixed(7)},${ne.lat.toFixed(7)},${ne.lon.toFixed(7)}`;
+  const p=new URLSearchParams({SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetMap",
+    LAYERS:"CP.CadastralParcel",STYLES:"",FORMAT:"image/png",TRANSPARENT:"true",
+    CRS:"EPSG:4258",WIDTH:"256",HEIGHT:"256",BBOX:bbox4258});
+  const wmsUrl=`https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?${p}`;
   try{
-    const r=await fetch(`https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?${p}`);
-    const buf=await r.arrayBuffer();
-    res.set("Content-Type","image/png").set("Cache-Control","public,max-age=86400").send(Buffer.from(buf));
-  }catch{res.status(502).end();}
+    const buf=await new Promise((resolve,reject)=>{
+      const req2=https.get(wmsUrl,{agent:_catastoAgent},r2=>{
+        const chunks=[];
+        r2.on('data',c=>chunks.push(c));
+        r2.on('end',()=>resolve(Buffer.concat(chunks)));
+        r2.on('error',reject);
+      });
+      req2.on('error',reject);
+      req2.setTimeout(10000,()=>{req2.destroy();reject(new Error('timeout'));});
+    });
+    res.set("Content-Type","image/png").set("Cache-Control","public,max-age=86400").send(buf);
+  }catch(e){
+    console.warn('[catasto]',e.message);
+    res.status(502).end();
+  }
 });
 
 // =================== FRAME PROXY (strip X-Frame-Options + anti-bot headers) ===================

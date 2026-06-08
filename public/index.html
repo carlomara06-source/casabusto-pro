@@ -527,7 +527,7 @@ function vMercato(){
       <div id="mercatoLiveWrap">
         <div style="text-align:center;padding:28px 16px;color:var(--muted)">
           <div style="display:inline-block;width:26px;height:26px;border:2.5px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin-bottom:10px"></div>
-          <div style="font-size:13px">Recupero prezzi dal RSS Immobiliare.it…</div>
+          <div style="font-size:13px">Recupero prezzi da Subito.it…</div>
         </div>
       </div>
     </div>`;
@@ -577,15 +577,15 @@ async function _loadMercatoLive(){
     if(!data?.zoneStats||!wrap)return;
 
     // Prepare zone data: OMI + medMq dal RSS
-    const zd=ZONE.map(z=>({nome:z.n,omi:omi[z.n]||0,medMq:(data.zoneStats[z.n]?.medMq)||0,count:(data.zoneStats[z.n]?.count)||0,new30:(data.zoneStats[z.n]?.new30)||0})).filter(z=>z.omi>0||z.count>0);
+    const zd=ZONE.map(z=>({nome:z.n,omi:omi[z.n]||0,medMq:(data.zoneStats[z.n]?.medMq)||0,count:(data.zoneStats[z.n]?.count)||0,vendita:(data.zoneStats[z.n]?.vendita)||0,affitto:(data.zoneStats[z.n]?.affitto)||0})).filter(z=>z.omi>0||z.count>0);
     const hasAsk=zd.some(z=>z.medMq>0);
     const age=Math.round((Date.now()-new Date(data.ts))/60000);
 
     wrap.innerHTML=`
       <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
-        Dati da <b>${data.totale}</b> annunci RSS · aggiornato ${age<2?'ora':age+'min fa'}
+        Dati da <b>${data.totale}</b> annunci ${data.fonte||'Subito.it'} · aggiornato ${age<2?'ora':age+'min fa'}
         · <span style="color:var(--terra)">■</span> Valore OMI
-        ${hasAsk?`· <span style="color:var(--olive)">■</span> Prezzo richiesto (offerta media)`:''}
+        ${hasAsk?`· <span style="color:var(--olive)">■</span> Prezzo offerta medio`:''}
       </div>
       <div style="position:relative;height:200px"><canvas id="cLiveChart"></canvas></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:18px">
@@ -596,7 +596,7 @@ async function _loadMercatoLive(){
               ${z.omi?`<span style="font-size:16px;font-weight:700;font-family:'Fraunces',serif;color:var(--terra)">${z.omi.toLocaleString('it-IT')}</span><span style="font-size:10px;color:var(--muted)">OMI</span>`:''}
               ${z.medMq?`<span style="font-size:13px;font-weight:600;color:var(--olive)">${z.medMq.toLocaleString('it-IT')}</span><span style="font-size:10px;color:var(--muted)">offerta</span>`:''}
             </div>
-            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${z.count} ann. · ${z.new30} ≤30g</div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${z.count} ann. · ${z.vendita||0}V ${z.affitto||0}A</div>
           </div>`).join('')}
       </div>`;
 
@@ -881,7 +881,7 @@ function vAnnunci(){
   if(annunciTab==='live'){ caricaAnnunciLive(); return; }
   const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
   document.getElementById('view').innerHTML=`
-    <div class="note" style="margin-bottom:18px">Inserisci manualmente gli annunci che noti sul territorio (da privati, colleghi, segnalazioni). Usa <b>Annunci live</b> per caricare gli annunci attivi da Immobiliare.it divisi per quartiere.</div>
+    <div class="note" style="margin-bottom:18px">Inserisci manualmente gli annunci che noti sul territorio (da privati, colleghi, segnalazioni). Usa <b>Annunci live</b> per caricare gli annunci attivi da Subito.it divisi per quartiere.</div>
     <div class="grid g3" style="margin-bottom:18px">
       ${stat('Annunci monitorati',annunci.length,'sul territorio','⚲')}
       ${stat('Immobili vuoti',vuoti,'opportunità di acquisizione','⌂')}
@@ -919,7 +919,7 @@ function annToLead(id){
   persist();alert('Lead creato nella pipeline acquisizione!');
 }
 
-/* ---------- ANNUNCI LIVE (RSS) ---------- */
+/* ---------- ANNUNCI LIVE (Subito.it) ---------- */
 let _annunciLiveCache=null, _cZoneAnn=null;
 
 async function caricaAnnunciLive(){
@@ -935,7 +935,7 @@ async function caricaAnnunciLive(){
     <div style="text-align:center;padding:52px 20px">
       <div style="width:36px;height:36px;border:3px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin:0 auto 16px"></div>
       <div style="font-size:15px;font-weight:600;margin-bottom:6px">Recupero annunci ultimi 30 giorni…</div>
-      <div style="font-size:13px;color:var(--muted)">RSS da Immobiliare.it + Wikicasa · Busto Arsizio</div>
+      <div style="font-size:13px;color:var(--muted)">Subito.it · Busto Arsizio · aggiorna ogni 30 min</div>
     </div>`;
   try{
     const r=await fetch('/api/annunci-live',{credentials:'same-origin',headers:authHeaders()});
@@ -945,7 +945,7 @@ async function caricaAnnunciLive(){
   }catch(e){
     document.getElementById('view').innerHTML=`<div class="card">
       <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d)">
-        <b>⚠️ Errore RSS:</b> ${e.message}<br>
+        <b>⚠️ Errore connessione:</b> ${e.message}<br>
         <span style="font-size:12px">Riprova tra qualche minuto.</span>
       </div>
       <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Riprova</button>
@@ -1067,7 +1067,7 @@ function _annuncioCard(a){
 
 function annuncioLiveToLead(btn){
   const{tipo,zona,mq,prezzo,fonte}=btn.dataset;
-  leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Immobiliare.it',fase:'valutazione',
+  leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Subito.it',fase:'valutazione',
     note:`Da ${fonte}: ${mq>0?mq+'mq, ':''}${prezzo>0?eur(+prezzo):'prezzo n.d.'}`,createdAt:new Date().toISOString()});
   persist();btn.textContent='✓ Creato';btn.disabled=true;
 }

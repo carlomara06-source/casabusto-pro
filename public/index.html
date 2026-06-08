@@ -159,8 +159,14 @@ tr:hover td{background:var(--terra-l)}
 .app-enter{animation:mapFadeIn .7s cubic-bezier(.4,0,.2,1) both}
 
 /* ── VIEW TRANSITION ── */
-@keyframes vFadeIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:none}}
-#view{animation:vFadeIn .22s ease both}
+@keyframes vFadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+#view{animation:vFadeIn .25s cubic-bezier(.4,0,.2,1) both}
+
+/* ── MICRO-ANIMATIONS ── */
+@keyframes fadeSlideUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+.anim-in{animation:fadeSlideUp .3s cubic-bezier(.4,0,.2,1) both}
+@keyframes numPop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.06)}100%{transform:scale(1);opacity:1}}
+.num-pop{animation:numPop .35s cubic-bezier(.34,1.56,.64,1) both}
 
 /* ── PORTAL LINK CARDS ── */
 .portal-link-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:4px}
@@ -175,6 +181,33 @@ tr:hover td{background:var(--terra-l)}
 
 /* ── INCARICHI AI BADGE ── */
 .ai-badge{display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#3b5068,#1b3048);color:#e0dbd0;font-size:10.5px;font-weight:700;padding:3px 10px;border-radius:20px;letter-spacing:.04em}
+
+/* ── ANNUNCI FILTER TABS ── */
+.ann-tabs{display:flex;gap:4px;background:var(--paper);padding:4px;border-radius:11px;border:1px solid var(--line);width:fit-content}
+.ann-tabs button{font-family:'Archivo';font-weight:600;font-size:12.5px;padding:6px 14px;border-radius:8px;border:none;background:none;cursor:pointer;color:var(--muted);transition:all .18s}
+.ann-tabs button.on{background:var(--card);color:var(--ink);box-shadow:var(--sh-sm)}
+
+/* ── PROPERTY BADGES ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap;vertical-align:middle;line-height:1.4}
+.badge-rooms{background:#edf0f5;color:var(--slate)}
+.badge-en-a,.badge-en-a4,.badge-en-a3,.badge-en-a2,.badge-en-a1{background:#d0ead6;color:#1a5e2a}
+.badge-en-b{background:#cce5ff;color:#004085}
+.badge-en-c{background:#d4edda;color:#155724}
+.badge-en-d{background:var(--gold-l);color:var(--gold)}
+.badge-en-e,.badge-en-f,.badge-en-g{background:var(--terra-l);color:var(--terra-d)}
+
+/* ── ANN CARD ── */
+.ann-card{border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;cursor:default;transition:box-shadow var(--t),transform .18s,border-color .18s}
+.ann-card:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(15,26,38,.13)}
+
+/* ── ZONE OMI CARD ── */
+.zone-kpi{background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 12px;transition:box-shadow var(--t),transform .18s}
+.zone-kpi:hover{box-shadow:var(--sh);transform:translateY(-1px)}
+
+/* ── IMPROVED CARD INTERACTIONS ── */
+.card{transition:box-shadow var(--t),transform .18s}
+.stat{transition:box-shadow var(--t),transform .18s}
+.stat:hover{box-shadow:var(--sh-lg);transform:translateY(-1px)}
 
 /* ── RESPONSIVE ── */
 @media(max-width:900px){
@@ -460,7 +493,7 @@ function vDash(){
       </div>
     </div>`;
 }
-function stat(lab,num,sub,corner){return `<div class="card stat"><div class="corner disp">${corner}</div><div class="lab">${lab}</div><div class="num">${num}</div><div class="sub">${sub}</div></div>`}
+function stat(lab,num,sub,corner){return `<div class="card stat anim-in"><div class="corner disp">${corner}</div><div class="lab">${lab}</div><div class="num num-pop">${num}</div><div class="sub">${sub}</div></div>`}
 function barChart(){
   const sorted=[...ZONE].sort((a,b)=>omi[b.n]-omi[a.n]);
   const max=Math.max(...sorted.map(z=>omi[z.n]));
@@ -920,7 +953,7 @@ function annToLead(id){
 }
 
 /* ---------- ANNUNCI LIVE (Subito.it) ---------- */
-let _annunciLiveCache=null, _cZoneAnn=null;
+let _annunciLiveCache=null, _cZoneAnn=null, _annunciFilter='tutti';
 
 async function caricaAnnunciLive(){
   annunciTab='live';
@@ -955,12 +988,14 @@ async function caricaAnnunciLive(){
 
 function renderAnnunciLive(data){
   if(!data?.annunci){document.getElementById('view').innerHTML='<div class="note">Dati non disponibili.</div>';return;}
-  const fonte=data.fonte||'Idealista';
-  // Se abbiamo date reali filtra a 30g, altrimenti mostra tutto (Idealista non espone date statiche)
+  const fonte=data.fonte||'Subito.it';
   const hasDates=data.annunci.some(a=>a.daysAgo!==null);
   const DAYS=30;
-  const mostra=hasDates?data.annunci.filter(a=>a.daysAgo!==null&&a.daysAgo<=DAYS):data.annunci;
-  const labelListing=hasDates?`Nuovi ultimi ${DAYS} giorni`:`Annunci attivi su ${fonte}`;
+  // apply date filter first, then contratto filter
+  const byDate=hasDates?data.annunci.filter(a=>a.daysAgo!==null&&a.daysAgo<=DAYS):data.annunci;
+  const mostra=_annunciFilter==='tutti'?byDate:byDate.filter(a=>a.contratto===_annunciFilter);
+  const totalV=byDate.filter(a=>a.contratto==='vendita').length;
+  const totalA=byDate.filter(a=>a.contratto==='affitto').length;
 
   const zStats=data.zoneStats||{};
   const zoneList=ZONE.map(z=>({nome:z.n,...(zStats[z.n]||{count:0,vendita:0,affitto:0,medMq:0})}))
@@ -970,58 +1005,72 @@ function renderAnnunciLive(data){
 
   if(_cZoneAnn){_cZoneAnn.destroy();_cZoneAnn=null;}
 
+  const mkTab=(v,lbl,cnt)=>`<button class="${_annunciFilter===v?'on':''}" onclick="_annunciFilter='${v}';renderAnnunciLive(_annunciLiveCache)">${lbl}${cnt!==null?` <span style="font-size:10px;opacity:.7">${cnt}</span>`:''}</button>`;
+
   document.getElementById('view').innerHTML=`
     <!-- KPI -->
-    <div class="grid g4" style="margin-bottom:22px">
-      ${stat('Annunci attivi', mostra.filter(a=>a.zona!=='N/D').length, fonte+' · Busto Arsizio', '⚲')}
-      ${stat('Zone', activeZones.length, 'quartieri con annunci', '◎')}
-      ${stat('In vendita', mostra.filter(a=>a.contratto==='vendita').length, 'unità disponibili ora', '🏠')}
-      ${stat('Aggiornamento', age<2?'adesso':age+'min fa', fonte, '⟳')}
+    <div class="grid g4" style="margin-bottom:20px">
+      ${stat('Annunci totali', byDate.filter(a=>a.zona!=='N/D').length, fonte+' · Busto Arsizio', '⚲')}
+      ${stat('Zone attive', activeZones.length, 'quartieri con annunci', '◎')}
+      ${stat('In vendita', totalV, 'unità disponibili ora', '🏠')}
+      ${stat('In affitto', totalA, 'immobili in locazione', '🔑')}
     </div>
 
-    <!-- Grafico + tabella zone -->
-    <div class="card" style="margin-bottom:22px">
-      <div class="sect-t"><span class="bar"></span>Annunci attivi per zona OMI</div>
-      <div style="position:relative;height:150px;margin-bottom:18px"><canvas id="cZoneAnn"></canvas></div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px">
-        ${activeZones.map(z=>`
-          <div style="background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 12px;transition:box-shadow var(--t)">
-            <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${z.nome}</div>
-            <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--ink);line-height:1">${z.count}</div>
+    <!-- Grafico + zone -->
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+        <div class="sect-t" style="margin:0"><span class="bar"></span>Distribuzione per zona OMI</div>
+        <div style="font-size:11.5px;color:var(--muted)">Aggiornato: ${age<2?'adesso':age+'min fa'}</div>
+      </div>
+      <div style="position:relative;height:140px;margin-bottom:18px"><canvas id="cZoneAnn"></canvas></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:8px">
+        ${activeZones.map(z=>{
+          const omiVal=omi[z.nome]||0;
+          const delta=omiVal&&z.medMq?Math.round(((z.medMq/omiVal)-1)*100):null;
+          return `<div class="zone-kpi">
+            <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${z.nome}</div>
+            <div style="font-family:'Fraunces',serif;font-size:26px;font-weight:700;color:var(--ink);line-height:1">${z.count}</div>
             <div style="font-size:10px;color:var(--muted);margin-top:3px">${z.vendita||0} vendita · ${z.affitto||0} affitto</div>
-            ${z.medMq?`<div style="font-size:10px;color:var(--terra);font-weight:700;margin-top:2px">${z.medMq.toLocaleString('it-IT')} €/mq</div>`:''}
-          </div>`).join('')}
+            ${z.medMq?`<div style="font-size:10px;color:var(--terra);font-weight:700;margin-top:4px">${z.medMq.toLocaleString('it-IT')} €/mq
+              ${delta!==null?`<span style="color:${delta>0?'var(--ok)':delta<-5?'var(--terra)':'var(--muted)'};font-weight:600;margin-left:3px">(${delta>0?'+':''}${delta}% OMI)</span>`:''}
+            </div>`:''}
+            ${omiVal?`<div style="font-size:9.5px;color:var(--muted);margin-top:1px">OMI base: ${omiVal} €/mq</div>`:''}
+          </div>`}).join('')}
       </div>
     </div>
 
-    <!-- Annunci per zona -->
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="sect-t" style="margin:0"><span class="bar"></span>${labelListing}</div>
-      <div style="font-size:12px;color:var(--muted)">${mostra.length} annunci · ${mostra.filter(a=>a.contratto==='vendita').length} vendita · ${mostra.filter(a=>a.contratto==='affitto').length} affitto</div>
+    <!-- Filter tabs + listing -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+      <div class="ann-tabs">${mkTab('tutti','Tutti',byDate.length)}${mkTab('vendita','Vendita',totalV)}${mkTab('affitto','Affitto',totalA)}</div>
+      <div style="font-size:12px;color:var(--muted)">${mostra.filter(a=>a.zona!=='N/D').length} annunci mostrati</div>
     </div>
-    ${mostra.length===0?`<div class="card"><div class="empty">Nessun annuncio trovato.<br><span style="font-size:12px;color:var(--muted)">Controlla la connessione e riprova.</span></div></div>`:''}
+    ${mostra.length===0?`<div class="card"><div class="empty">Nessun annuncio trovato.<br><span style="font-size:12px;color:var(--muted)">Riprova o cambia filtro.</span></div></div>`:''}
     ${ZONE.map(z=>{
       const list=mostra.filter(a=>a.zona===z.n);
       if(!list.length)return '';
-      const prezzi=list.filter(a=>a.prezzo>0&&a.contratto==='vendita').map(a=>a.prezzo);
-      const med=prezzi.length?Math.round(prezzi.reduce((s,p)=>s+p,0)/prezzi.length/1000)*1000:0;
+      const prezziV=list.filter(a=>a.prezzo>0&&a.contratto==='vendita').map(a=>a.prezzo);
+      const prezziA=list.filter(a=>a.prezzo>0&&a.contratto==='affitto').map(a=>a.prezzo);
+      const medV=prezziV.length?Math.round(prezziV.reduce((s,p)=>s+p,0)/prezziV.length/1000)*1000:0;
+      const medA=prezziA.length?Math.round(prezziA.reduce((s,p)=>s+p,0)/prezziA.length/1000)*1000:0;
+      const omiVal=omi[z.n]||0;
       return `<div class="card" style="margin-bottom:14px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
           <div class="sect-t" style="margin:0"><span class="bar"></span>${z.n}</div>
-          <div style="font-size:11.5px;color:var(--muted)">
-            ${omi[z.n]?`<b style="color:var(--terra)">${omi[z.n]} €/mq</b> OMI · `:''}
-            <b>${list.length}</b> annunci
-            ${med?` · media <b>${eur(med)}</b>`:''}
+          <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:11.5px;color:var(--muted)">
+            ${omiVal?`<span><b style="color:var(--terra)">${omiVal} €/mq</b> OMI</span>`:''}
+            ${medV?`<span>vendita media <b>${eur(medV)}</b></span>`:''}
+            ${medA?`<span>affitto <b>${eur(medA)}/mese</b></span>`:''}
+            <span><b>${list.length}</b> annunci</span>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:10px">
           ${list.map(a=>_annuncioCard(a)).join('')}
         </div>
       </div>`;
     }).join('')}
     ${mostra.filter(a=>a.zona==='N/D').length?`<div class="card">
       <div class="sect-t" style="margin-bottom:12px"><span class="bar"></span>Zona non identificata</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(248px,1fr));gap:10px">
         ${mostra.filter(a=>a.zona==='N/D').map(a=>_annuncioCard(a)).join('')}
       </div>
     </div>`:''}`;
@@ -1036,7 +1085,7 @@ function renderAnnunciLive(data){
             {label:'Vendita',data:activeZones.map(z=>z.vendita||0),backgroundColor:'#c0572b',borderRadius:4,stack:'s',borderSkipped:false},
             {label:'Affitto',data:activeZones.map(z=>z.affitto||0),backgroundColor:'rgba(192,87,43,.3)',borderRadius:4,stack:'s',borderSkipped:false}
           ]},
-        options:{responsive:true,maintainAspectRatio:false,
+        options:{responsive:true,maintainAspectRatio:false,animation:{duration:600,easing:'easeOutQuart'},
           plugins:{legend:{position:'top',labels:{boxWidth:10,font:{family:'Archivo',size:10}}},tooltip:{mode:'index',callbacks:{title:t=>activeZones[t[0].dataIndex]?.nome}}},
           scales:{x:{stacked:true,ticks:{font:{size:9}},grid:{display:false}},y:{stacked:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}}}}
       });
@@ -1044,20 +1093,30 @@ function renderAnnunciLive(data){
   }
 }
 
+function _energiaBadge(e){
+  if(!e)return '';
+  const k=e.toLowerCase().replace(/[^a-g0-9+]/g,'').slice(0,2);
+  const cls=`badge-en-${k.slice(0,1)}`;
+  return `<span class="badge ${cls}">${e}</span>`;
+}
 function _annuncioCard(a){
   const dl=a.daysAgo===0?'Oggi':a.daysAgo===1?'Ieri':a.daysAgo!==null?a.daysAgo+'g fa':'Live';
   const fresh=a.daysAgo!==null&&a.daysAgo<=3;
   const isAffitto=a.contratto==='affitto';
   const prezzoLabel=a.prezzo?(eur(a.prezzo)+(isAffitto?'<span style="font-size:11px;font-weight:400">/mese</span>':'')):'Su richiesta';
-  const mqLabel=(!isAffitto&&a.mq&&a.prezzo&&a.prezzo>30000)?`${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq · `:'';
-  return `<div style="border:1.5px solid ${fresh?'var(--terra)':'var(--line)'};border-radius:10px;padding:12px;background:${fresh?'var(--terra-l)':'var(--paper)'};display:flex;flex-direction:column;gap:5px">
+  const mqUnit=(!isAffitto&&a.mq&&a.prezzo&&a.prezzo>30000)?Math.round(a.prezzo/a.mq):0;
+  const stanzeLabel=a.stanze>0?`<span class="badge badge-rooms">🛏 ${a.stanze} loc.</span>`:'';
+  const enLabel=_energiaBadge(a.energia);
+  const affittoTag=isAffitto?`<span style="font-size:10px;background:var(--olive-l);color:var(--olive);border-radius:20px;padding:2px 7px;font-weight:700">Affitto</span>`:'';
+  return `<div class="ann-card" style="border:1.5px solid ${fresh?'var(--terra)':'var(--line)'};background:${fresh?'var(--terra-l)':'var(--paper)'}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-      <span style="font-weight:700;font-size:12.5px;line-height:1.3">${a.tipo}${a.mq?' · '+a.mq+'mq':''}${isAffitto?' · <span style="color:var(--terra)">Affitto</span>':''}</span>
+      <span style="font-weight:700;font-size:12.5px;line-height:1.3">${a.tipo}${a.mq?' · '+a.mq+'mq':''}${a.stanze>0?' · '+a.stanze+' loc.':''}</span>
       <span style="font-size:10px;background:${a.daysAgo===0?'var(--terra)':'transparent'};color:${a.daysAgo===0?'#fff':'var(--terra)'};border:1px solid var(--terra);border-radius:20px;padding:2px 7px;font-weight:700;white-space:nowrap;flex-shrink:0">${dl}</span>
     </div>
-    <div style="font-size:16px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif;line-height:1">${prezzoLabel}</div>
-    <div style="font-size:10.5px;color:var(--muted)">${mqLabel}${a.fonte}</div>
-    <div style="font-size:11px;color:var(--slate);line-height:1.5;flex:1">${(a.titolo||'').slice(0,110)}</div>
+    <div style="font-size:17px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif;line-height:1.1">${prezzoLabel}</div>
+    <div style="font-size:10.5px;color:var(--muted)">${mqUnit?mqUnit.toLocaleString('it-IT')+' €/mq · ':''}${a.fonte}</div>
+    ${(stanzeLabel||enLabel||affittoTag)?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:1px">${stanzeLabel}${enLabel}${affittoTag}</div>`:''}
+    <div style="font-size:11px;color:var(--slate);line-height:1.5;flex:1">${(a.titolo||'').slice(0,100)}</div>
     <div style="display:flex;gap:5px;margin-top:4px">
       <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none;flex:1;justify-content:center">Vedi ↗</a>
       <button class="btn btn-p btn-sm" data-tipo="${a.tipo}" data-zona="${a.zona}" data-mq="${a.mq||0}" data-prezzo="${a.prezzo||0}" data-fonte="${a.fonte}" onclick="annuncioLiveToLead(this)" style="flex:1;justify-content:center">＋ Lead</button>
@@ -1214,7 +1273,7 @@ function vValut(){
             <option value="0.87">Molto scarsa — cortile cieco</option>
           </select></div>
       </div>
-      <div class="card">
+      <div class="card" style="margin-bottom:14px">
         <div class="sect-t"><span class="bar"></span>Impianti e pertinenze</div>
         <div class="fld"><label>Riscaldamento</label>
           <select id="vl_risc" onchange="calcValut()">
@@ -1237,6 +1296,38 @@ function vValut(){
             <option value="1" selected>Assente o non rilevante</option>
             <option value="1.02">Fisso (split in più ambienti)</option>
           </select></div>
+        <div class="fld"><label>Cantina / locale deposito</label>
+          <select id="vl_cant" onchange="calcValut()">
+            <option value="0">Nessuna</option>
+            <option value="2500">Piccola (≤ 5 mq, + € 2.500)</option>
+            <option value="4500">Media (6–12 mq, + € 4.500)</option>
+            <option value="7000">Grande (> 12 mq, + € 7.000)</option>
+          </select></div>
+      </div>
+      <div class="card">
+        <div class="sect-t"><span class="bar"></span>Vista, affaccio e servizi</div>
+        <div class="fld"><label>Vista / affaccio</label>
+          <select id="vl_vista" onchange="calcValut()">
+            <option value="1.06">Vista panoramica / aperta eccellente</option>
+            <option value="1.03">Verde / parco / giardino</option>
+            <option value="1" selected>Strada / standard (riferimento)</option>
+            <option value="0.96">Cortile interno o vista parzialmente ostruita</option>
+            <option value="0.91">Cortile cieco / muri / vista molto limitata</option>
+          </select></div>
+        <div class="fld"><label>Bagni / dotazione servizi</label>
+          <select id="vl_bagni" onchange="calcValut()">
+            <option value="1.05">3 bagni o più / dotazione premium</option>
+            <option value="1.03">2 bagni / doppi servizi</option>
+            <option value="1" selected>1 bagno (riferimento)</option>
+            <option value="0.96">1 bagno piccolo / finestra assente</option>
+          </select></div>
+        <div class="fld"><label>Ristrutturazione kitchen/bagni</label>
+          <select id="vl_fin" onchange="calcValut()">
+            <option value="1.04">Finiture premium (marmo, parquet pregiato)</option>
+            <option value="1" selected>Finiture standard (riferimento)</option>
+            <option value="0.96">Finiture datate da aggiornare</option>
+            <option value="0.91">Finiture molto scadenti / da rifare tutto</option>
+          </select></div>
       </div>
     </div>
     <div>
@@ -1251,8 +1342,8 @@ function vValut(){
         <div class="sect-t"><span class="bar"></span>Analisi coefficienti di merito</div>
         <div id="vl_breakdown"></div>
         <div style="margin-top:10px;font-size:11px;color:var(--muted);line-height:1.5">
-          Metodo: valore OMI zona × prodotto coefficienti di merito + pertinenze (sup.commerciale OMI).<br>
-          Balcone scoperto: 25% del €/mq · Terrazzo/loggia: 40% del €/mq · Box: valore assoluto.
+          Metodo: valore OMI zona × prodotto coefficienti di merito (15 variabili) + pertinenze assolute.<br>
+          Balcone scoperto: 25% del €/mq · Terrazzo/loggia: 40% del €/mq · Box e cantina: valori assoluti.
         </div>
       </div>
       <div class="note">
@@ -1274,14 +1365,15 @@ function calcValut(){
   const ft=+val('vl_tipo'), fs=+val('vl_stato'), fan=+val('vl_anno');
   const fe=+val('vl_ener'), fp=+val('vl_piano'), fa=+val('vl_asc');
   const fesp=+val('vl_esp'), fl=+val('vl_lum'), fr=+val('vl_risc'), fac=+val('vl_ac');
-  const box=+val('vl_box')||0;
-  // prodotto coefficienti
-  const f=ft*fs*fan*fe*fp*fa*fesp*fl*fr*fac;
+  const fvista=+val('vl_vista')||1, fbagni=+val('vl_bagni')||1, ffin=+val('vl_fin')||1;
+  const box=+val('vl_box')||0, cantina=+val('vl_cant')||0;
+  // prodotto coefficienti (tutti moltiplicativi)
+  const f=ft*fs*fan*fe*fp*fa*fesp*fl*fr*fac*fvista*fbagni*ffin;
   const mqVal=Math.round(base*f);
   // superfici commerciali OMI: balcone scoperto 25%, terrazzo/loggia 40%
   const vBalc=Math.round(balc*base*f*0.25);
   const vTerr=Math.round(terr*base*f*0.40);
-  const totale=Math.round((mqVal*mq+vBalc+vTerr+box)/1000)*1000;
+  const totale=Math.round((mqVal*mq+vBalc+vTerr+box+cantina)/1000)*1000;
   // output
   document.getElementById('vl_out').textContent=eur(totale);
   document.getElementById('vl_range').textContent=
@@ -1293,19 +1385,23 @@ function calcValut(){
   const rows=[
     ['Base zona '+z, `${base} €/mq`,true],
     ['Superficie utile', `${mq} mq`,true],
-    ['Tipologia',       fmtC(ft), ft!==1],
-    ['Stato conservativo', fmtC(fs), fs!==1],
-    ['Anno costruzione',fmtC(fan),fan!==1],
-    ['Classe energetica',fmtC(fe),fe!==1],
-    ['Piano',           fmtC(fp), fp!==1],
-    ['Ascensore',       fmtC(fa), fa!==1],
-    ['Esposizione',     fmtC(fesp),fesp!==1],
-    ['Luminosità',      fmtC(fl), fl!==1],
-    ['Riscaldamento',   fmtC(fr), fr!==1],
-    ['Condizionamento', fmtC(fac),fac!==1],
+    ['Tipologia',          fmtC(ft),  ft!==1],
+    ['Stato conservativo', fmtC(fs),  fs!==1],
+    ['Anno costruzione',   fmtC(fan), fan!==1],
+    ['Classe energetica',  fmtC(fe),  fe!==1],
+    ['Piano',              fmtC(fp),  fp!==1],
+    ['Ascensore',          fmtC(fa),  fa!==1],
+    ['Esposizione',        fmtC(fesp),fesp!==1],
+    ['Luminosità',         fmtC(fl),  fl!==1],
+    ['Riscaldamento',      fmtC(fr),  fr!==1],
+    ['Condizionamento',    fmtC(fac), fac!==1],
+    ['Vista / affaccio',   fmtC(fvista),fvista!==1],
+    ['Bagni / servizi',    fmtC(fbagni),fbagni!==1],
+    ['Finiture',           fmtC(ffin),  ffin!==1],
     ...(balc>0?[[`Balcone scoperto (${balc}mq × 25%)`,`+ ${eur(vBalc)}`,true]]:[]),
     ...(terr>0?[[`Terrazzo/loggia (${terr}mq × 40%)`,`+ ${eur(vTerr)}`,true]]:[]),
     ...(box>0?[['Box/parcheggio',`+ ${eur(box)}`,true]]:[]),
+    ...(cantina>0?[['Cantina/deposito',`+ ${eur(cantina)}`,true]]:[]),
     ['<b>Coefficiente complessivo</b>',`<b>${f.toFixed(3)}</b>`,true],
     ['<b>Valore stimato</b>',`<b style="color:var(--terra);font-size:14px">${eur(totale)}</b>`,true],
   ].filter(r=>r[2]!==false);
@@ -1320,19 +1416,27 @@ function valutToText(){
   const base=omi[z]||MERCATO.mediaCitta;
   const f=(+val('vl_tipo'))*(+val('vl_stato'))*(+val('vl_anno'))*(+val('vl_ener'))*
           (+val('vl_piano'))*(+val('vl_asc'))*(+val('vl_esp'))*(+val('vl_lum'))*
-          (+val('vl_risc'))*(+val('vl_ac'));
-  const box=+val('vl_box')||0;
+          (+val('vl_risc'))*(+val('vl_ac'))*(+val('vl_vista')||1)*(+val('vl_bagni')||1)*(+val('vl_fin')||1);
+  const box=+val('vl_box')||0, cantina=+val('vl_cant')||0;
   const balc=+val('vl_balc')||0, terr=+val('vl_terr')||0;
   const vBalc=Math.round(balc*base*f*0.25), vTerr=Math.round(terr*base*f*0.40);
-  const tot=Math.round((Math.round(base*f)*mq+vBalc+vTerr+box)/1000)*1000;
+  const tot=Math.round((Math.round(base*f)*mq+vBalc+vTerr+box+cantina)/1000)*1000;
+  const pertParts=[];
+  if(balc>0)pertParts.push(`balcone ${balc} mq`);
+  if(terr>0)pertParts.push(`terrazzo ${terr} mq`);
+  if(box>0)pertParts.push('box/parcheggio');
+  if(cantina>0)pertParts.push('cantina/deposito');
+  const pertStr=pertParts.length?', '+pertParts.join(', '):'';
   const t=`VALUTAZIONE INDICATIVA — ${z}, Busto Arsizio\n\n`+
-    `Immobile: ${mq} mq superficie utile in zona ${z}${balc>0?`, balcone ${balc} mq`:''}${terr>0?`, terrazzo ${terr} mq`:''}.\n\n`+
+    `Immobile: ${mq} mq superficie utile in zona ${z}${pertStr}.\n\n`+
     `Sulla base dei valori OMI ufficiali per la zona (${base} €/mq) e delle caratteristiche `+
-    `dell'immobile (coefficiente di merito: ${f.toFixed(3)}), il valore di mercato indicativo è:\n\n`+
+    `dell'immobile (coefficiente di merito complessivo: ${f.toFixed(3)}), il valore di mercato indicativo è:\n\n`+
     `   ${eur(Math.round(tot*.90/1000)*1000)} — ${eur(Math.round(tot*1.10/1000)*1000)}\n\n`+
     `con un valore mediano di riferimento di ${eur(tot)}.\n\n`+
-    `Questa stima è calcolata con il metodo dei coefficienti di merito OMI (Agenzia delle Entrate) `+
-    `e ha valore puramente indicativo. Non sostituisce una perizia giurata.\n\n`+
+    `La stima tiene conto di: stato conservativo, classe energetica, piano, esposizione, luminosità, `+
+    `riscaldamento, vista/affaccio, dotazione servizi igienici e finiture. `+
+    `Metodo: coefficienti di merito OMI (Agenzia delle Entrate) + Codice delle Valutazioni Immobiliari Tecnoborsa (V ed.).\n\n`+
+    `Questa stima ha valore puramente indicativo e non sostituisce una perizia giurata.\n\n`+
     `Per una valutazione puntuale gratuita e per conoscere il piano di vendita, resto a Sua completa disposizione.`;
   const el=document.getElementById('vl_text'); el.style.display='block'; el.textContent=t;
 }
@@ -1657,7 +1761,7 @@ function _init3D(){
       if(canvas&&document.body.contains(canvas)){
         map3dObj.resize();
         const ldr=document.getElementById('map3dLoading');
-        if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+        if(ldr){ldr.style.transition='opacity .4s ease';ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.remove();},450);}
         return;
       }
     }catch(e){}
@@ -1672,7 +1776,7 @@ function _init3D(){
       if(c&&document.body.contains(c)){
         map2dFallback.invalidateSize();
         const ldr=document.getElementById('map3dLoading');
-        if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+        if(ldr){ldr.style.transition='opacity .4s ease';ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.remove();},450);}
         return;
       }
     }catch(e){}
@@ -1694,8 +1798,9 @@ function _init3D(){
       map3dObj=new maplibregl.Map({
         container:'map3d',
         style:'https://tiles.openfreemap.org/styles/bright',
-        center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,antialias:true,
-        maxZoom:19,minZoom:10
+        center:[8.851,45.611],zoom:13.2,pitch:0,bearing:0,antialias:true,
+        maxZoom:19,minZoom:10,
+        fadeDuration:300
       });
     }catch(e){
       console.error('[3D] init error:',e);
@@ -1730,9 +1835,16 @@ function _init3D(){
       clearTimeout(_t3d);
       map3dReady=true;
 
-      // Nascondi spinner con fade
+      // Nascondi spinner con fade fluido
       const ldr=document.getElementById('map3dLoading');
-      if(ldr){ldr.style.opacity='0';setTimeout(()=>{if(ldr.parentNode)ldr.style.display='none';},580);}
+      if(ldr){
+        ldr.style.transition='opacity .65s cubic-bezier(.4,0,.2,1)';
+        ldr.style.opacity='0';
+        setTimeout(()=>{if(ldr.parentNode)ldr.remove();},700);
+      }
+
+      // Animazione intro: partenza dall'alto, poi inclinazione fluida
+      map3dObj.easeTo({pitch:54,bearing:-17,zoom:14.3,duration:1800,easing:t=>t<.5?2*t*t:(1-Math.pow(-2*t+2,2)/2)});
 
       // --- Rileva source vettoriale ---
       const styleDef=map3dObj.getStyle();

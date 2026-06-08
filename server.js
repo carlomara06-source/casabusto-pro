@@ -359,12 +359,68 @@ Rispondi SEMPRE con JSON valido e compatto, senza markdown, senza backtick, con 
   }
 });
 
-// =================== ANNUNCI LIVE (Subito.it scraping) ===================
+// =================== ANNUNCI LIVE (Subito.it multi-pagina) ===================
 const ZONE_BUSTO=["Centro","Tribunale","Sant'Edoardo","Sant'Anna","Santissimi Apostoli","San Michele","Madonna Regina","Redentore","Beata Giuliana","Borsano","Sacconago"];
 function detectZonaBusto(text){
   const t=(text||"").toLowerCase();
+  // Match diretto del nome quartiere
   for(const z of ZONE_BUSTO){if(t.includes(z.toLowerCase()))return z;}
-  const viaMap={"via galvani":"Centro","via magenta":"Centro","corso sempione":"Centro","piazza vittoria":"Centro","via manzoni":"Centro","viale stelvio":"Centro","via marsala":"Tribunale","via duca d'aosta":"Tribunale","viale dandolo":"Tribunale","via foscolo":"Sant'Anna","via leopardi":"Sant'Anna","via mameli":"Sant'Edoardo","via san michele":"San Michele","via redentore":"Redentore","via borsano":"Borsano","via sacconago":"Sacconago","via giuliana":"Beata Giuliana","via madonna regina":"Madonna Regina"};
+  // Match via/piazza → zona OMI (80+ strade di Busto Arsizio)
+  const viaMap={
+    // ── CENTRO ──
+    "piazza manzoni":"Centro","via milano":"Centro","corso europa":"Centro",
+    "via magenta":"Centro","via galvani":"Centro","via manzoni":"Centro",
+    "viale stelvio":"Centro","corso sempione":"Centro","piazza vittoria":"Centro",
+    "via garibaldi":"Centro","via cairoli":"Centro","via cavour":"Centro",
+    "via verdi":"Centro","via dante":"Centro","via roma":"Centro",
+    "piazza san giovanni":"Centro","via torino":"Centro","via morazzone":"Centro",
+    "corso matteotti":"Centro","via pellico":"Centro","via monviso":"Centro",
+    "via marco polo":"Centro","piazza plebiscito":"Centro","via broletto":"Centro",
+    "corso italia":"Centro","via cattaneo":"Centro","via venezia":"Centro",
+    "via padre monti":"Centro","via toselli":"Centro",
+    // ── TRIBUNALE ──
+    "via marsala":"Tribunale","via duca d'aosta":"Tribunale","viale dandolo":"Tribunale",
+    "via battisti":"Tribunale","via pirandello":"Tribunale","via goldoni":"Tribunale",
+    "via saffi":"Tribunale","via toscana":"Tribunale","via galileo":"Tribunale",
+    "viale italia":"Tribunale","piazza del tribunale":"Tribunale","via vico":"Tribunale",
+    "via avogadro":"Tribunale","via volta":"Tribunale",
+    // ── SANT'EDOARDO ──
+    "via mameli":"Sant'Edoardo","via cadorna":"Sant'Edoardo","via carducci":"Sant'Edoardo",
+    "via de amicis":"Sant'Edoardo","via pascoli":"Sant'Edoardo","via petrarca":"Sant'Edoardo",
+    "via rossini":"Sant'Edoardo","via donizetti":"Sant'Edoardo","via bellini":"Sant'Edoardo",
+    "via sant'edoardo":"Sant'Edoardo","via cherubini":"Sant'Edoardo","via palestrina":"Sant'Edoardo",
+    // ── SANT'ANNA ──
+    "via foscolo":"Sant'Anna","via leopardi":"Sant'Anna","via sant'anna":"Sant'Anna",
+    "via solferino":"Sant'Anna","via piave":"Sant'Anna","via isonzo":"Sant'Anna",
+    "via tagliamento":"Sant'Anna","via vittorio veneto":"Sant'Anna","via montegrappa":"Sant'Anna",
+    "via sempione":"Sant'Anna","viale sempione":"Sant'Anna",
+    // ── SANTISSIMI APOSTOLI ──
+    "via apostoli":"Santissimi Apostoli","via corridoni":"Santissimi Apostoli",
+    "via crispi":"Santissimi Apostoli","via xx settembre":"Santissimi Apostoli",
+    "via oberdan":"Santissimi Apostoli","via matteotti":"Santissimi Apostoli",
+    "piazza del lavoro":"Santissimi Apostoli",
+    // ── SAN MICHELE ──
+    "via san michele":"San Michele","via cosenz":"San Michele",
+    "via predazzo":"San Michele","piazza san michele":"San Michele",
+    "viale san michele":"San Michele","via varesina":"San Michele",
+    // ── MADONNA REGINA ──
+    "via madonna regina":"Madonna Regina","via monte bianco":"Madonna Regina",
+    "via monte cervino":"Madonna Regina","via cascina del sole":"Madonna Regina",
+    "via montello":"Madonna Regina","via dolomiti":"Madonna Regina",
+    // ── REDENTORE ──
+    "via redentore":"Redentore","via campone":"Redentore","via ticino":"Redentore",
+    "via adda":"Redentore","via oglio":"Redentore","via trento":"Redentore",
+    // ── BEATA GIULIANA ──
+    "via giuliana":"Beata Giuliana","via monte nero":"Beata Giuliana",
+    "via lombardia":"Beata Giuliana","via montebello":"Beata Giuliana",
+    "via monte san gabriele":"Beata Giuliana","via nerviano":"Beata Giuliana",
+    // ── BORSANO ──
+    "via borsano":"Borsano","via san carlo borromeo":"Borsano",
+    "via carso":"Borsano","viale borsano":"Borsano","via prima strada":"Borsano",
+    // ── SACCONAGO ──
+    "via sacconago":"Sacconago","via monte rosa":"Sacconago",
+    "viale sacconago":"Sacconago","via san giovanni":"Sacconago"
+  };
   for(const[via,zona]of Object.entries(viaMap)){if(t.includes(via))return zona;}
   return null;
 }
@@ -383,31 +439,40 @@ function parseSubitoPage(html, contratto){
     if(it?.kind!=='AdItem')continue;
     if(!RESI.includes(it.category?.label))continue;
     const feat=it.features||{};
-    // Prezzo: feature /price (vendita: "165000 €", affitto: "900 €")
+    // Prezzo
     const priceRaw=feat['/price']?.values?.[0]?.value||feat['/price']?.values?.[0]?.key||'';
     let prezzo=0;
     if(priceRaw){const v=parseInt(String(priceRaw).replace(/[^0-9]/g,''),10);if(v>0)prezzo=v;}
-    // mq: feature /size (es. "75 mq")
+    // mq
     const sizeRaw=feat['/size']?.values?.[0]?.value||feat['/size']?.values?.[0]?.key||'';
     const mq=sizeRaw?parseInt(String(sizeRaw).replace(/[^0-9]/g,''),10):0;
-    // Data pubblicazione → daysAgo reale
+    // Stanze (locali)
+    const stanzeRaw=feat['/room']?.values?.[0]?.value||feat['/room']?.values?.[0]?.key||'';
+    const stanze=stanzeRaw?parseInt(String(stanzeRaw).replace(/[^0-9]/g,''),10):0;
+    // Classe energetica
+    const energiaRaw=feat['/energy_class']?.values?.[0]?.value||feat['/energy_class']?.values?.[0]?.key||'';
+    const energia=energiaRaw?String(energiaRaw).replace(/[^A-Ga-g0-9+]/g,'').toUpperCase().slice(0,3):'';
+    // Data
     const pubDate=it.date||null;
     const pubMs=pubDate?new Date(pubDate).getTime():0;
     const daysAgo=(pubMs>0&&!isNaN(pubMs))?Math.max(0,Math.floor((now-pubMs)/(1000*60*60*24))):null;
     const titolo=it.subject||'';
+    const body=it.body||'';
     const link=it.urls?.default||'';
     if(!link)continue;
     const tipoM=titolo.match(/^(bilocale|trilocale|quadrilocale|quintilocale|monolocale|villa|attico|appartamento|casa|loft|rustico|mansarda)/i);
     const catTipoMap={'Appartamenti':'Appartamento','Ville singole e a schiera':'Villa','Case indipendenti':'Casa','Mansarde':'Mansarda','Nuove Costruzioni':'Nuova costruzione'};
     const tipo=tipoM?tipoM[1][0].toUpperCase()+tipoM[1].slice(1).toLowerCase():(catTipoMap[it.category?.label]||'Appartamento');
-    const zona=detectZonaBusto(titolo)||detectZonaBusto(it.body||'')||'N/D';
+    // Zona: cerca in titolo, poi in body (spesso contiene l'indirizzo)
+    const zona=detectZonaBusto(titolo)||detectZonaBusto(body)||'N/D';
     annunci.push({id:it.urn||'',fonte:'Subito.it',contratto,tipo,zona,
-      mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate,daysAgo});
+      mq:mq||null,prezzo:prezzo||null,stanze:stanze||null,energia:energia||null,
+      titolo,link,pubDate,daysAgo});
   }
   return annunci;
 }
 
-// Cache 30 min — Subito.it più frequente di Idealista
+// Cache 30 min
 let _annunciCache=null, _annunciCacheTs=0;
 const ANNUNCI_CACHE_TTL=30*60*1000;
 
@@ -417,9 +482,14 @@ app.get("/api/annunci-live", requireLogin, async (req,res)=>{
   }
 
   const annunci=[];
+  // 3 pagine vendita + 3 pagine affitto = fino a ~140 annunci
   const sources=[
     {url:"https://www.subito.it/annunci-lombardia/vendita/immobili/varese/busto-arsizio/",contratto:"vendita"},
+    {url:"https://www.subito.it/annunci-lombardia/vendita/immobili/varese/busto-arsizio/?o=2",contratto:"vendita"},
+    {url:"https://www.subito.it/annunci-lombardia/vendita/immobili/varese/busto-arsizio/?o=3",contratto:"vendita"},
     {url:"https://www.subito.it/annunci-lombardia/affitto/immobili/varese/busto-arsizio/",contratto:"affitto"},
+    {url:"https://www.subito.it/annunci-lombardia/affitto/immobili/varese/busto-arsizio/?o=2",contratto:"affitto"},
+    {url:"https://www.subito.it/annunci-lombardia/affitto/immobili/varese/busto-arsizio/?o=3",contratto:"affitto"},
   ];
 
   for(const{url,contratto}of sources){

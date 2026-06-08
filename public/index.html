@@ -520,7 +520,9 @@ function renderQuotazioniFinestre(){
         <div style="font-size:32px">⏳</div>
         <div style="font-weight:600">Caricamento quotazioni…</div>
       </div>
-      <iframe id="quotFrame" style="width:100%;height:680px;border:none;display:block"
+      <iframe id="quotFrame"
+        sandbox="allow-scripts allow-forms allow-popups allow-modals"
+        style="width:100%;height:680px;border:none;display:block"
         onload="quotLoaded()" onerror="quotLoaded()"></iframe>
     </div>
     <div id="quotActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
@@ -541,22 +543,39 @@ function loadQuot(id){
   const loading=document.getElementById('quotLoading');
   const actions=document.getElementById('quotActions');
   if(!frame)return;
-  if(loading){loading.style.display='flex';loading.innerHTML=`<div style="font-size:32px">${f.icon}</div><div style="font-weight:600">Caricamento ${f.nome}…</div>`;}
+  clearTimeout(window._quotTimer); clearTimeout(window._quotTimer2);
+  if(loading){
+    loading.style.display='flex';
+    loading.innerHTML=`<div style="font-size:32px">${f.icon}</div>
+      <div style="font-weight:600">Caricamento ${f.nome}…</div>
+      <div style="font-size:12px;color:var(--muted);margin-top:4px">Connessione al portale in corso</div>`;
+  }
   frame.src='/api/frame?url='+encodeURIComponent(f.url)+'&t='+Date.now();
   if(actions)actions.innerHTML=`<a href="${f.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${f.nome} nel browser ↗</a>`;
-  clearTimeout(window._quotTimer);
+  // Fase 2 — dopo 15s: avvisa che sta usando il proxy avanzato (ScraperAPI)
   window._quotTimer=setTimeout(()=>{
     if(loading&&loading.style.display!=='none'){
+      loading.innerHTML=`<div style="font-size:32px">🔄</div>
+        <div style="font-weight:600">Bypass anti-bot in corso…</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Proxy avanzato attivo — attendi circa 1 minuto</div>
+        <div style="margin-top:14px"><a href="${f.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Apri ${f.nome} direttamente ↗</a></div>`;
+    }
+  },15000);
+  // Fase 3 — dopo 75s: errore definitivo
+  window._quotTimer2=setTimeout(()=>{
+    if(loading&&loading.style.display!=='none'){
       loading.innerHTML=`<div style="font-size:40px">🔒</div>
-        <div style="font-weight:600;margin-top:10px">Sito non accessibile in anteprima</div>
+        <div style="font-weight:600;margin-top:10px">Sito non embeddabile</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:6px">Il portale blocca l'integrazione. Aprilo direttamente nel browser:</div>
         <a href="${f.url}" target="_blank" class="btn btn-p btn-sm" style="margin-top:14px;text-decoration:none">Apri ${f.nome} ↗</a>`;
     }
-  },12000);
+  },75000);
 }
 function quotLoaded(){
   const loading=document.getElementById('quotLoading');
   if(loading)loading.style.display='none';
   clearTimeout(window._quotTimer);
+  clearTimeout(window._quotTimer2);
 }
 
 /* Aggiornamento dati OMI via API 3eurotools */

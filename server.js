@@ -118,6 +118,10 @@ app.get("/api/catasto-tile", requireLogin, async (req,res)=>{
 // =================== FRAME PROXY (strip X-Frame-Options + anti-bot headers) ===================
 const FRAME_ALLOWED = ['immobiliare.it','idealista.it','casa.it','wikicasa.it','tecnoborsa.it','agenziaentrate.gov.it','borsino','immobiliare24.it'];
 
+// Cache in memoria (1 ora) — evita di sprecare crediti ScraperAPI su richieste ripetute
+const frameCache = new Map(); // url → {html, contentType, origin, ts}
+const FRAME_CACHE_TTL = 60 * 60 * 1000; // 1 ora
+
 // Headers completi di Chrome 124 su macOS — bypassano bot-detection base
 const CHROME_HEADERS = {
   "User-Agent":              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -144,6 +148,14 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
   if(!FRAME_ALLOWED.some(d=>urlObj.hostname.includes(d)))
     return res.status(403).send("Dominio non consentito");
 
+  // Cache hit?
+  const cacheKey = url.split('&t=')[0]; // ignora cache-buster
+  const cached = frameCache.get(cacheKey);
+  if(cached && Date.now() - cached.ts < FRAME_CACHE_TTL){
+    console.log(`[frame] cache hit → ${urlObj.hostname}`);
+    return sendCachedProxied(res, cached);
+  }
+
   // Controlla se l'HTML è una Cloudflare challenge
   function isCloudflareChallenge(html){
     return html.length < 10000 && (
@@ -154,9 +166,14 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
     );
   }
 
-  // Inietta helpers nel HTML e invia la risposta
+  // Inietta anti-framebusting + helpers nel HTML e invia la risposta
   function sendProxied(res, html, contentType, origin){
-    const inject = `<base href="${origin}/"><script>
+    // 1. Rimuovi script di framebusting comuni
+    html = html.replace(/if\s*\([\s\S]{0,30}top[\s\S]{0,30}(?:self|window|location)[\s\S]{0,80}location\s*=/gi, '/*fb*/if(false');
+    // 2. Patch window.top (deve essere PRIMA di ogni altro script)
+    const topPatch = `<script>(function(){try{Object.defineProperty(window,'top',{get:function(){return window.self;},configurable:true});}catch(e){}}());<\/script>`;
+    // 3. Helpers links + base href
+    const helpers = `<base href="${origin}/"><script>
       (function(){
         function fixLinks(){
           document.querySelectorAll('a[href]').forEach(function(a){
@@ -169,10 +186,18 @@ app.get("/api/frame", requireLogin, async (req,res)=>{
         new MutationObserver(fixLinks).observe(document.body||document.documentElement,{childList:true,subtree:true});
       })();
     <\/script>`;
-    html = html.replace(/<head([^>]*)>/i, `<head$1>${inject}`);
+    html = html.replace(/<head([^>]*)>/i, `<head$1>${topPatch}${helpers}`);
+    // Salva in cache
+    frameCache.set(cacheKey, {html, contentType, origin, ts:Date.now()});
     res.set("Content-Type", contentType || "text/html; charset=utf-8")
        .set("X-Robots-Tag","noindex")
        .send(html);
+  }
+
+  function sendCachedProxied(res, c){
+    res.set("Content-Type", c.contentType || "text/html; charset=utf-8")
+       .set("X-Robots-Tag","noindex")
+       .send(c.html);
   }
 
   let lastError = "Sito non raggiungibile";

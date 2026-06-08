@@ -1700,6 +1700,7 @@ function importCSV(e){const f=e.target.files[0];if(!f)return;const r=new FileRea
    MAPPA 3D — MapLibre GL JS + OpenFreeMap + Catasto WMS + Immobili
    ================================================================ */
 let map3dObj=null, map3dReady=false, map2dFallback=null;
+let _catastoOn=false, _catastoOpacity=0.55;
 
 /* Controlla se WebGL è disponibile nel browser corrente */
 function checkWebGL(){
@@ -1712,9 +1713,16 @@ function checkWebGL(){
 function vMappa3D(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <label style="font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;cursor:pointer;background:rgba(255,255,255,.9);border:1px solid var(--line);border-radius:8px;padding:5px 11px;backdrop-filter:blur(6px)">
-        <input type="checkbox" id="togCatasto" onchange="toggleCatastoLayer(this.checked)"> Catasto
-      </label>
+      <button id="btnCatasto" class="btn btn-g btn-sm" onclick="toggleCatastoLayer(!_catastoOn)"
+        style="gap:6px;transition:all .18s">
+        <span style="font-size:12px">📋</span> Catasto
+      </button>
+      <div id="catastoOpWrap" style="display:none;align-items:center;gap:6px;background:rgba(255,255,255,.9);
+        border:1px solid var(--line);border-radius:8px;padding:4px 10px;backdrop-filter:blur(6px)">
+        <span style="font-size:10px;color:var(--muted);font-weight:600">Opacità</span>
+        <input type="range" id="catastoOp" min="15" max="85" value="55" style="width:70px;cursor:pointer"
+          oninput="_setCatastoOpacity(+this.value/100)">
+      </div>
       <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.easeTo({pitch:58,bearing:-18,zoom:15.5,duration:900});else if(map2dFallback)map2dFallback.setZoom(16)">🏙 Zoom+</button>
       <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.easeTo({pitch:0,bearing:0,zoom:13.5,duration:800});else if(map2dFallback)map2dFallback.setZoom(13)">🗺 Piano</button>
       <button class="btn btn-g btn-sm" onclick="if(map3dObj)map3dObj.flyTo({center:[8.851,45.611],zoom:14.3,pitch:54,bearing:-17,duration:1400});else if(map2dFallback)map2dFallback.setView([45.611,8.851],14)">⌂ Centro</button>
@@ -1733,6 +1741,13 @@ function vMappa3D(){
         <div style="color:#49596a;font-size:12px">Busto Arsizio · MapLibre GL JS</div>
       </div>
       <div id="map3d" style="width:100%;height:100%;position:absolute;inset:0"></div>
+      <div id="catastoPanel" style="display:none;position:absolute;bottom:16px;right:16px;width:272px;
+        background:rgba(255,255,255,.97);border:1px solid var(--line);border-radius:14px;padding:16px;
+        box-shadow:0 4px 24px rgba(15,26,38,.22);z-index:10;backdrop-filter:blur(10px);
+        transition:opacity .22s,transform .22s;opacity:0;transform:translateY(6px)"></div>
+      <div id="catastoHint" style="display:none;position:absolute;bottom:16px;left:50%;transform:translateX(-50%);
+        background:rgba(15,26,38,.78);color:#fff;font-size:12px;font-weight:600;padding:6px 16px;
+        border-radius:20px;backdrop-filter:blur(6px);pointer-events:none;letter-spacing:.02em;white-space:nowrap"></div>
     </div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px">
       <div class="card" style="padding:14px;text-align:center">
@@ -2025,39 +2040,285 @@ function _initLeaflet2D(container){
   });
 }
 
+/* ── CATASTO: toggle layer ── */
 function toggleCatastoLayer(show){
-  // Modalità 3D (MapLibre)
+  _catastoOn=!!show;
+
+  // --- Aggiorna pulsante topbar ---
+  const btn=document.getElementById('btnCatasto');
+  const opWrap=document.getElementById('catastoOpWrap');
+  if(btn){
+    btn.style.background=show?'var(--terra)':'';
+    btn.style.color=show?'#fff':'';
+    btn.style.borderColor=show?'var(--terra-d)':'';
+  }
+  if(opWrap)opWrap.style.display=show?'flex':'none';
+
+  // --- Hint sulla mappa ---
+  const hint=document.getElementById('catastoHint');
+  if(hint){
+    hint.textContent='📋 Clicca su un edificio o terreno per interrogare il catasto';
+    hint.style.display=show?'block':'none';
+    if(show)setTimeout(()=>{if(hint)hint.style.display='none';},3500);
+  }
+
+  // --- Chiudi panel se si disattiva ---
+  if(!show){_closeCatastoPanel();_clearCatastoHighlight();}
+
+  // --- Modalità 3D MapLibre ---
   if(map3dObj&&map3dReady){
     try{
       if(map3dObj.getLayer('catasto-layer'))
         map3dObj.setLayoutProperty('catasto-layer','visibility',show?'visible':'none');
     }catch(e){console.warn('[catasto]',e.message);}
+    // Click handler: aggiungi/rimuovi
+    map3dObj.off('click',_onCatastoMapClick);
+    if(show){
+      map3dObj.on('click',_onCatastoMapClick);
+      map3dObj.getCanvas().style.cursor='crosshair';
+    }else{
+      map3dObj.getCanvas().style.cursor='';
+    }
     return;
   }
-  // Modalità 2D (Leaflet) — catasto via proxy
+
+  // --- Modalità 2D Leaflet ---
   if(map2dFallback){
     if(show){
       if(!window._catasto2D){
-        // Crea WMS layer usando tile proxy (convertiamo bbox da Leaflet → EPSG:3857)
-        window._catasto2D=L.tileLayer(
-          '/api/catasto-tile?bbox={bbox}',
-          {opacity:0.55,attribution:'© Agenzia Entrate',
-           // Leaflet non supporta {bbox-epsg-3857} nativamente → usiamo custom
-           tileSize:256}
-        );
-        // Override per passare bbox corretto
+        window._catasto2D=L.tileLayer('/api/catasto-tile?bbox={bbox}',
+          {opacity:_catastoOpacity,attribution:'© Agenzia Entrate - CC-BY 4.0',tileSize:256});
         window._catasto2D.getTileUrl=function(coords){
           const b=this._tileCoordsToBounds(coords);
           const toM=p=>L.CRS.EPSG3857.project(p);
-          const sw=toM(b.getSouthWest()), ne=toM(b.getNorthEast());
+          const sw=toM(b.getSouthWest()),ne=toM(b.getNorthEast());
           return `/api/catasto-tile?bbox=${sw.x},${sw.y},${ne.x},${ne.y}`;
         };
       }
       window._catasto2D.addTo(map2dFallback);
+      map2dFallback.off('click',_onCatastoMap2DClick);
+      map2dFallback.on('click',_onCatastoMap2DClick);
     }else{
       if(window._catasto2D)map2dFallback.removeLayer(window._catasto2D);
+      map2dFallback.off('click',_onCatastoMap2DClick);
     }
   }
+}
+
+/* ── Opacità catasto ── */
+function _setCatastoOpacity(v){
+  _catastoOpacity=v;
+  if(map3dObj&&map3dReady){
+    try{map3dObj.setPaintProperty('catasto-layer','raster-opacity',v);}catch(e){}
+  }
+  if(window._catasto2D)window._catasto2D.setOpacity(v);
+}
+
+/* ── Handler click MapLibre 3D ── */
+async function _onCatastoMapClick(e){
+  if(!_catastoOn)return;
+  const{lng,lat}=e.lngLat;
+  _showCatastoPanel(null,'loading');
+  try{
+    const r=await fetch(`/api/catasto-info?lat=${lat}&lng=${lng}`,
+      {credentials:'same-origin',headers:authHeaders()});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const data=await r.json();
+    _showCatastoPanel(data,'ok');
+    if(data.parcel)_highlightParcel(data.parcel,data.lat,data.lng);
+  }catch(err){
+    _showCatastoPanel({error:err.message},'ok');
+  }
+}
+
+/* ── Handler click Leaflet 2D ── */
+async function _onCatastoMap2DClick(e){
+  if(!_catastoOn)return;
+  const lat=e.latlng.lat,lng=e.latlng.lng;
+  _showCatastoPanel(null,'loading');
+  try{
+    const r=await fetch(`/api/catasto-info?lat=${lat}&lng=${lng}`,
+      {credentials:'same-origin',headers:authHeaders()});
+    const data=await r.json();
+    _showCatastoPanel(data,'ok');
+  }catch(err){
+    _showCatastoPanel({error:err.message},'ok');
+  }
+}
+
+/* ── Panel informativo catasto ── */
+function _showCatastoPanel(data,state){
+  const panel=document.getElementById('catastoPanel');
+  if(!panel)return;
+  if(state==='loading'){
+    panel.style.display='block';
+    setTimeout(()=>{panel.style.opacity='1';panel.style.transform='translateY(0)'},10);
+    panel.innerHTML=`<div style="display:flex;align-items:center;gap:10px;padding:4px 0">
+      <div style="width:18px;height:18px;border:2.5px solid rgba(0,0,0,.1);border-top-color:var(--terra);
+        border-radius:50%;animation:_m3dspin .75s linear infinite;flex-shrink:0"></div>
+      <span style="font-size:13px;color:var(--slate)">Interrogazione catasto…</span>
+    </div>`;
+    return;
+  }
+  if(!data||data.error){
+    panel.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:12.5px;color:var(--muted)">⚠️ Nessuna particella trovata qui</span>
+      <button onclick="_closeCatastoPanel()" style="border:none;background:none;cursor:pointer;
+        color:var(--muted);font-size:18px;line-height:1;padding:0 2px">✕</button>
+    </div>`;
+    return;
+  }
+
+  const{address,parcel,zona,lat,lng}=data;
+  const addrLine=[address?.road,address?.number].filter(Boolean).join(' ');
+  const suburb=address?.suburb||'';
+  const city=address?.city||'Busto Arsizio';
+  const pc=address?.postcode||'';
+  const areaStr=parcel?.area?`~${parcel.area.toLocaleString('it-IT')} m²`:'';
+  const mqStr=parcel?.area?` · circa ${Math.round(parcel.area)} m²`:'';
+  const linkVisura=`https://www.agenziaentrate.gov.it/portale/web/guest/schede/fabbricatiterreni/consultazione-atti-catasto`;
+  const linkStrView=`https://maps.google.com/maps?q=${lat},${lng}&layer=c&cbll=${lat},${lng}`;
+  const zonaHtml=zona?`<span style="background:var(--terra-l);color:var(--terra);font-size:10px;font-weight:700;
+    padding:2px 8px;border-radius:20px">${zona}</span>`:'';
+  const suburbHtml=suburb?`<span style="background:var(--paper);border:1px solid var(--line);color:var(--slate);
+    font-size:10px;padding:2px 8px;border-radius:20px">${suburb}</span>`:'';
+  const areaHtml=areaStr?`<span style="background:var(--olive-l);color:var(--olive);font-size:10px;font-weight:600;
+    padding:2px 8px;border-radius:20px">${areaStr}</span>`:'';
+
+  // Dati da passare ai pulsanti (JSON-safe)
+  const leadData=JSON.stringify({addrLine,zona:zona||'',city,suburb}).replace(/"/g,'&quot;');
+
+  panel.innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+      <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);
+        letter-spacing:.1em;line-height:1.4">📋 Particella catastale</div>
+      <button onclick="_closeCatastoPanel();_clearCatastoHighlight()"
+        style="border:none;background:none;cursor:pointer;color:var(--muted);font-size:17px;
+        line-height:1;padding:0 0 0 6px;flex-shrink:0">✕</button>
+    </div>
+    ${addrLine?`<div style="font-size:14.5px;font-weight:700;color:var(--ink);margin-bottom:2px;
+      line-height:1.3">${addrLine}</div>`:''}
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px">
+      ${[suburb,city,pc].filter(Boolean).join(' · ')}
+    </div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:12px">
+      ${zonaHtml}${suburbHtml}${areaHtml}
+    </div>
+    ${zona?`<div style="background:var(--terra-l);border-radius:9px;padding:9px 11px;margin-bottom:12px;
+      display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:9.5px;font-weight:700;color:var(--terra);text-transform:uppercase;
+          letter-spacing:.08em">Valore OMI zona</div>
+        <div style="font-size:18px;font-weight:700;font-family:'Fraunces',serif;color:var(--terra)">
+          ${(omi[zona]||'N/D')} €/mq
+        </div>
+      </div>
+      <div style="font-size:10px;color:var(--terra-d);text-align:right;line-height:1.5">
+        Fonte:<br>Agenzia<br>Entrate
+      </div>
+    </div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">
+      <button class="btn btn-p btn-sm" style="font-size:11.5px;justify-content:center"
+        onclick="_catastoToLead('${leadData}')">＋ Crea lead</button>
+      <button class="btn btn-g btn-sm" style="font-size:11.5px;justify-content:center"
+        onclick="_catastoToImmobile('${leadData}')">⌂ Aggiungi</button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+      <a href="${linkStrView}" target="_blank" class="btn btn-g btn-sm"
+        style="font-size:11px;justify-content:center;text-decoration:none">
+        Street view ↗
+      </a>
+      <a href="${linkVisura}" target="_blank" class="btn btn-g btn-sm"
+        style="font-size:11px;justify-content:center;text-decoration:none">
+        Visura AE ↗
+      </a>
+    </div>
+    <div style="font-size:10px;color:var(--muted);text-align:center;margin-top:8px;
+      font-family:monospace">${lat.toFixed(6)}, ${lng.toFixed(6)}</div>`;
+}
+
+function _closeCatastoPanel(){
+  const p=document.getElementById('catastoPanel');
+  if(!p)return;
+  p.style.opacity='0';p.style.transform='translateY(6px)';
+  setTimeout(()=>{p.style.display='none';},230);
+}
+
+/* ── Evidenzia particella sulla mappa 3D ── */
+function _highlightParcel(parcel){
+  if(!map3dObj||!parcel?.bbox)return;
+  const[minLng,minLat,maxLng,maxLat]=parcel.bbox;
+  const geojson={type:'Feature',geometry:{type:'Polygon',coordinates:[[
+    [minLng,minLat],[maxLng,minLat],[maxLng,maxLat],[minLng,maxLat],[minLng,minLat]
+  ]]}};
+  try{
+    if(map3dObj.getSource('_chl')){
+      map3dObj.getSource('_chl').setData(geojson);
+    }else{
+      map3dObj.addSource('_chl',{type:'geojson',data:geojson});
+      map3dObj.addLayer({id:'_chl_fill',type:'fill',source:'_chl',
+        paint:{'fill-color':'#c0572b','fill-opacity':0.18}});
+      map3dObj.addLayer({id:'_chl_line',type:'line',source:'_chl',
+        paint:{'line-color':'#c0572b','line-width':2.5,'line-dasharray':[3,1.5]}});
+    }
+  }catch(e){console.warn('[catasto hl]',e.message);}
+}
+
+function _clearCatastoHighlight(){
+  if(!map3dObj)return;
+  ['_chl_fill','_chl_line'].forEach(id=>{try{if(map3dObj.getLayer(id))map3dObj.removeLayer(id);}catch(e){}});
+  try{if(map3dObj.getSource('_chl'))map3dObj.removeSource('_chl');}catch(e){}
+}
+
+/* ── Crea lead da particella catastale ── */
+function _catastoToLead(jsonStr){
+  let info={};try{info=JSON.parse(jsonStr.replace(/&quot;/g,'"'));}catch(e){}
+  const{addrLine,zona,city,suburb}=info;
+  leads.push({id:uid(),nome:addrLine||`Particella ${city}`,zona:zona||'',tel:'',fonte:'Catasto',
+    fase:'valutazione',note:`Identificato via catasto. Indirizzo: ${[addrLine,suburb,city].filter(Boolean).join(', ')}`,
+    createdAt:new Date().toISOString()});
+  persist();
+  _closeCatastoPanel();
+  _toast('✓ Lead creato dalla particella!','ok');
+}
+
+/* ── Aggiungi immobile da particella catastale ── */
+function _catastoToImmobile(jsonStr){
+  let info={};try{info=JSON.parse(jsonStr.replace(/&quot;/g,'"'));}catch(e){}
+  const{addrLine,zona}=info;
+  openM(`<h2>Nuovo immobile da catasto</h2>
+    <div class="fld-row">
+      <div class="fld"><label>Tipologia</label><input id="m_tipo" value="Appartamento"></div>
+      <div class="fld"><label>Zona</label><select id="m_zona">${zoneOpts(zona)}</select></div>
+    </div>
+    <div class="fld"><label>Indirizzo</label><input id="m_ind" value="${addrLine||''}"></div>
+    <div class="fld-row">
+      <div class="fld"><label>Mq</label><input id="m_mq" type="number" value=""></div>
+      <div class="fld"><label>Prezzo €</label><input id="m_prezzo" type="number" value=""></div>
+    </div>
+    <div class="fld"><label>Stato</label><select id="m_stato">
+      <option value="acq" selected>Acquisito</option>
+      <option value="mandato">In mandato</option>
+      <option value="tratt">In trattativa</option></select></div>
+    <div class="fld"><label>Note</label><textarea id="m_note">Da sopralluogo catastale.</textarea></div>
+    <div class="modal-foot">
+      <button class="btn btn-g" onclick="closeM()">Annulla</button>
+      <button class="btn btn-p" onclick="saveImmobile('')">Salva</button>
+    </div>`);
+}
+
+/* ── Toast notification ── */
+function _toast(msg,type){
+  const t=document.createElement('div');
+  const bg=type==='ok'?'var(--ok)':type==='err'?'var(--err)':'var(--ink)';
+  t.style.cssText=`position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);
+    background:${bg};color:#fff;padding:10px 22px;border-radius:10px;font-size:13px;font-weight:600;
+    z-index:9999;box-shadow:0 4px 16px rgba(0,0,0,.22);transition:opacity .25s,transform .25s;opacity:0`;
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='1';t.style.transform='translateX(-50%) translateY(0)'},10);
+  setTimeout(()=>{t.style.opacity='0';t.style.transform='translateX(-50%) translateY(8px)';
+    setTimeout(()=>t.remove(),280);},2200);
 }
 
 /* ================================================================

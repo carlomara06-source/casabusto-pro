@@ -147,6 +147,78 @@ app.get("/api/catasto-tile", requireLogin, async (req,res)=>{
   }
 });
 
+// =================== CATASTO INFO (GetFeatureInfo + Nominatim reverse geocode) ===================
+app.get("/api/catasto-info", requireLogin, async (req,res)=>{
+  const lat=parseFloat(req.query.lat), lng=parseFloat(req.query.lng);
+  if(isNaN(lat)||isNaN(lng))return res.status(400).json({error:"Coordinate non valide"});
+
+  const delta=0.0009; // ~80 m per lato — bbox attorno al punto cliccato
+  const bbox4258=`${(lat-delta).toFixed(7)},${(lng-delta).toFixed(7)},${(lat+delta).toFixed(7)},${(lng+delta).toFixed(7)}`;
+
+  const fip=new URLSearchParams({
+    SERVICE:"WMS",VERSION:"1.3.0",REQUEST:"GetFeatureInfo",
+    LAYERS:"CP.CadastralParcel",QUERY_LAYERS:"CP.CadastralParcel",
+    INFO_FORMAT:"application/vnd.ogc.gml",
+    CRS:"EPSG:4258",WIDTH:"512",HEIGHT:"512",
+    BBOX:bbox4258,I:"256",J:"256",FEATURE_COUNT:"1"
+  });
+
+  const [gmlRes, nomRes]=await Promise.allSettled([
+    // 1 — WMS GetFeatureInfo (bbox particella)
+    new Promise((resolve,reject)=>{
+      const url=`https://wms.cartografia.agenziaentrate.gov.it/inspire/wms/ows01.php?${fip}`;
+      const r2=https.get(url,{agent:_catastoAgent},rs=>{
+        const ch=[];
+        rs.on('data',c=>ch.push(c));
+        rs.on('end',()=>resolve(Buffer.concat(ch).toString('utf8')));
+        rs.on('error',reject);
+      });
+      r2.on('error',reject);
+      r2.setTimeout(8000,()=>{r2.destroy();reject(new Error('timeout'));});
+    }),
+    // 2 — Nominatim reverse geocode (indirizzo stradale)
+    fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`,
+      {headers:{'User-Agent':'casabusto-pro/1.0'},signal:AbortSignal.timeout(5000)})
+      .then(r=>r.json()).catch(()=>null)
+  ]);
+
+  const result={lat,lng,parcel:null,address:null,zona:null};
+
+  // Parsa GML → bbox particella + area approssimativa
+  if(gmlRes.status==='fulfilled'){
+    const m=gmlRes.value.match(/<gml:coordinates[^>]*>([\s\S]*?)<\/gml:coordinates>/);
+    if(m){
+      const pts=m[1].trim().split(/\s+/);
+      if(pts.length>=2){
+        const [l1,a1]=pts[0].split(',').map(Number);
+        const [l2,a2]=pts[pts.length-1].split(',').map(Number);
+        const minLng=Math.min(l1,l2),minLat=Math.min(a1,a2);
+        const maxLng=Math.max(l1,l2),maxLat=Math.max(a1,a2);
+        const dLng=maxLng-minLng, dLat=maxLat-minLat;
+        const areaM2=Math.round(dLng*111320*Math.cos(lat*Math.PI/180)*dLat*110540);
+        result.parcel={bbox:[minLng,minLat,maxLng,maxLat],area:areaM2>0?areaM2:null};
+      }
+    }
+  }
+
+  // Parsa Nominatim → indirizzo strutturato
+  if(nomRes.status==='fulfilled'&&nomRes.value){
+    const n=nomRes.value, a=n.address||{};
+    result.address={
+      road:(a.road||a.pedestrian||a.path||a.cycleway||''),
+      number:(a.house_number||''),
+      suburb:(a.suburb||a.quarter||a.neighbourhood||''),
+      city:(a.city||a.town||a.village||'Busto Arsizio'),
+      postcode:(a.postcode||''),
+      display:(n.display_name||'')
+    };
+    // Zona OMI via detectZonaBusto (già definita più avanti — hoist OK)
+    result.zona=detectZonaBusto([a.road,a.suburb,a.quarter,n.display_name].join(' '));
+  }
+
+  res.json(result);
+});
+
 // =================== FRAME PROXY (strip X-Frame-Options + anti-bot headers) ===================
 const FRAME_ALLOWED = ['immobiliare.it','idealista.it','casa.it','wikicasa.it','tecnoborsa.it','agenziaentrate.gov.it','borsino','immobiliare24.it'];
 

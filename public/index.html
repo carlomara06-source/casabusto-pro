@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <link href="https://unpkg.com/maplibre-gl/dist/maplibre-gl.css" rel="stylesheet"/>
 <script src="https://unpkg.com/maplibre-gl/dist/maplibre-gl.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600;9..144,700&family=Archivo:wght@400;500;600;700;800&display=swap');
 
@@ -480,11 +481,25 @@ const QUOT_FONTI=[
   {id:'omiQ',nome:'OMI — Ag. Entrate',desc:'Quotazioni catastali ufficiali',icon:'🏛',color:'#4d6844',
    url:'https://www.agenziaentrate.gov.it/portale/schede/fabbricatiterreni/omi/banche-dati/quotazioni-immobiliari'}
 ];
-let _mercatoTab='dati', _quotCur='borsinoQ';
+// Istanze Chart.js (distruggi prima di ricreare)
+let _cTrend=null, _cZone=null, _cLive=null;
+
+function _chartOpts(extra={}){
+  return {responsive:true,maintainAspectRatio:false,
+    plugins:{legend:{labels:{font:{family:'Archivo',size:11},boxWidth:12}},...(extra.plugins||{})},
+    scales:{y:{ticks:{font:{size:10},callback:v=>v.toLocaleString('it-IT')},grid:{color:'rgba(0,0,0,.05)'}},
+            x:{ticks:{font:{size:9},maxRotation:35},grid:{display:false}},...(extra.scales||{})},
+    ...extra};
+}
+function _destroyCharts(...charts){charts.forEach(c=>{if(c)c.destroy();})}
 
 function vMercato(){
   document.getElementById('topAct').innerHTML=`
-    <button class="btn btn-g btn-sm" onclick="aggiornaTutte()">⟳ Aggiorna OMI</button>`;
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-g btn-sm" onclick="aggiornaTutte()">⟳ Aggiorna OMI</button>
+      <button class="btn btn-g btn-sm" onclick="_mercatoLiveReset();_loadMercatoLive()">📡 Dati live</button>
+    </div>`;
+
   document.getElementById('view').innerHTML=`
     <div class="grid g4" style="margin-bottom:22px">
       ${stat('Prezzo medio città',MERCATO.mediaCitta+' €/mq','residenziale in vendita','▲')}
@@ -494,38 +509,110 @@ function vMercato(){
     </div>
     <div class="grid g2" style="margin-bottom:22px">
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Prezzi per zona (€/mq)</div>
-        ${barChart()}
-        <div style="font-size:11.5px;color:var(--muted);margin-top:12px;line-height:1.5">
-          Zona più cara: <b>Centro</b> (~2.004 €/mq) · Più economica: <b>Borsano</b> (~1.453 €/mq)
+        <div class="sect-t"><span class="bar"></span>Andamento prezzi €/mq</div>
+        <div style="position:relative;height:230px"><canvas id="cTrend"></canvas></div>
+        <div style="font-size:11px;color:var(--muted);margin-top:10px;display:flex;gap:14px">
+          <span><span style="display:inline-block;width:20px;height:2px;background:var(--terra);vertical-align:middle;margin-right:5px"></span>Busto Arsizio</span>
+          <span><span style="display:inline-block;width:20px;height:2px;background:var(--olive);vertical-align:middle;margin-right:5px;border-bottom:2px dashed var(--olive);display:inline-block"></span>Provincia VA</span>
         </div>
-        <div id="api_global_result"></div>
       </div>
       <div class="card">
-        <div class="sect-t"><span class="bar"></span>Note di mercato</div>
-        <div style="font-size:13px;color:var(--slate);line-height:1.7">
-          ${MERCATO.note.map(n=>`<div style="padding:8px 0;border-bottom:1px solid var(--line)">${n}</div>`).join('')}
-        </div>
-        <div style="font-size:11.5px;color:var(--muted);margin-top:12px">
-          Aggiornato: <b>${MERCATO.aggiornato}</b> · Fonte: OMI Agenzia delle Entrate
-        </div>
+        <div class="sect-t"><span class="bar"></span>Quotazioni OMI per zona</div>
+        <div style="position:relative;height:230px"><canvas id="cZone"></canvas></div>
+        <div id="api_global_result"></div>
       </div>
     </div>
     <div class="card">
-      <div class="sect-t"><span class="bar"></span>Portali quotazioni — consulta le fonti</div>
-      <div style="font-size:12.5px;color:var(--muted);margin-bottom:16px">Dati aggiornati su prezzi, trend e valutazioni per Busto Arsizio. Si aprono in una nuova scheda.</div>
-      <div class="portal-link-grid">
-        ${QUOT_FONTI.map(f=>`
-          <a href="${f.url}" target="_blank" rel="noopener noreferrer" class="portal-link-card" style="text-decoration:none;color:inherit">
-            <div class="pl-top">
-              <div class="pl-icon">${f.icon}</div>
-              <div class="pl-name" style="color:${f.color}">${f.nome}</div>
-            </div>
-            <div class="pl-desc">${f.desc}</div>
-            <div style="font-size:11px;color:var(--terra);font-weight:700;margin-top:4px">Apri ↗</div>
-          </a>`).join('')}
+      <div class="sect-t"><span class="bar"></span>Prezzi di offerta live — dati dai portali</div>
+      <div id="mercatoLiveWrap">
+        <div style="text-align:center;padding:28px 16px;color:var(--muted)">
+          <div style="display:inline-block;width:26px;height:26px;border:2.5px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin-bottom:10px"></div>
+          <div style="font-size:13px">Recupero prezzi dal RSS Immobiliare.it…</div>
+        </div>
       </div>
     </div>`;
+
+  // Grafico trend storico (dati già disponibili client-side)
+  _destroyCharts(_cTrend,_cZone,_cLive); _cTrend=_cZone=_cLive=null;
+  requestAnimationFrame(()=>{
+    const ctxT=document.getElementById('cTrend');
+    if(ctxT&&window.Chart){
+      const lbls=STORICO.busto.map(d=>{const[y,m]=d.m.split('-');const ms=['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];return ms[+m]+"'"+y.slice(2);});
+      _cTrend=new Chart(ctxT,{type:'line',data:{labels:lbls,datasets:[
+        {label:'Busto Arsizio',data:STORICO.busto.map(d=>d.v),borderColor:'#c0572b',backgroundColor:'rgba(192,87,43,.1)',tension:.4,fill:true,pointRadius:4,pointHoverRadius:6,borderWidth:2},
+        {label:'Provincia VA',data:STORICO.provincia.map(d=>d.v),borderColor:'#4d6844',backgroundColor:'rgba(77,104,68,.07)',tension:.4,fill:true,pointRadius:3,pointHoverRadius:5,borderDash:[5,4],borderWidth:1.5}
+      ]},options:_chartOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y.toLocaleString('it-IT')+' €/mq'}}},scales:{y:{ticks:{callback:v=>v+'€'}}}}),});
+    }
+    // Grafico OMI per zona
+    const ctxZ=document.getElementById('cZone');
+    if(ctxZ&&window.Chart){
+      const zOrd=ZONE.filter(z=>omi[z.n]).sort((a,b)=>(omi[b.n]||0)-(omi[a.n]||0));
+      _cZone=new Chart(ctxZ,{type:'bar',data:{
+        labels:zOrd.map(z=>z.n.length>13?z.n.split(' ').pop():z.n),
+        datasets:[{label:'OMI €/mq',data:zOrd.map(z=>omi[z.n]||0),
+          backgroundColor:zOrd.map((_,i)=>`rgba(192,87,43,${0.9-i*0.06})`),borderRadius:5}]
+      },options:_chartOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+c.parsed.y.toLocaleString('it-IT')+' €/mq'}}},scales:{y:{ticks:{callback:v=>v+'€'}}}}),});
+    }
+  });
+
+  // Carica prezzi live dal RSS
+  _loadMercatoLive();
+}
+
+function _mercatoLiveReset(){
+  _annunciLiveCache=null;
+  const w=document.getElementById('mercatoLiveWrap');
+  if(w)w.innerHTML=`<div style="text-align:center;padding:28px 16px;color:var(--muted)"><div style="display:inline-block;width:26px;height:26px;border:2.5px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin-bottom:10px"></div><div style="font-size:13px">Recupero prezzi…</div></div>`;
+}
+
+async function _loadMercatoLive(){
+  const wrap=document.getElementById('mercatoLiveWrap');
+  try{
+    if(!_annunciLiveCache){
+      const r=await fetch('/api/annunci-live',{credentials:'same-origin',headers:authHeaders()});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      _annunciLiveCache=await r.json();
+    }
+    const data=_annunciLiveCache;
+    if(!data?.zoneStats||!wrap)return;
+
+    // Prepare zone data: OMI + medMq dal RSS
+    const zd=ZONE.map(z=>({nome:z.n,omi:omi[z.n]||0,medMq:(data.zoneStats[z.n]?.medMq)||0,count:(data.zoneStats[z.n]?.count)||0,new30:(data.zoneStats[z.n]?.new30)||0})).filter(z=>z.omi>0||z.count>0);
+    const hasAsk=zd.some(z=>z.medMq>0);
+    const age=Math.round((Date.now()-new Date(data.ts))/60000);
+
+    wrap.innerHTML=`
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        Dati da <b>${data.totale}</b> annunci RSS · aggiornato ${age<2?'ora':age+'min fa'}
+        · <span style="color:var(--terra)">■</span> Valore OMI
+        ${hasAsk?`· <span style="color:var(--olive)">■</span> Prezzo richiesto (offerta media)`:''}
+      </div>
+      <div style="position:relative;height:200px"><canvas id="cLiveChart"></canvas></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-top:18px">
+        ${zd.filter(z=>z.count>0).map(z=>`
+          <div style="background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 12px">
+            <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:4px">${z.nome}</div>
+            <div style="display:flex;gap:8px;align-items:baseline">
+              ${z.omi?`<span style="font-size:16px;font-weight:700;font-family:'Fraunces',serif;color:var(--terra)">${z.omi.toLocaleString('it-IT')}</span><span style="font-size:10px;color:var(--muted)">OMI</span>`:''}
+              ${z.medMq?`<span style="font-size:13px;font-weight:600;color:var(--olive)">${z.medMq.toLocaleString('it-IT')}</span><span style="font-size:10px;color:var(--muted)">offerta</span>`:''}
+            </div>
+            <div style="font-size:10.5px;color:var(--muted);margin-top:3px">${z.count} ann. · ${z.new30} ≤30g</div>
+          </div>`).join('')}
+      </div>`;
+
+    if(window.Chart){
+      if(_cLive){_cLive.destroy();_cLive=null;}
+      const ctx2=document.getElementById('cLiveChart');
+      if(ctx2){
+        const ds=[{label:'OMI €/mq',data:zd.map(z=>z.omi||null),backgroundColor:'rgba(192,87,43,.75)',borderRadius:4,borderSkipped:false}];
+        if(hasAsk)ds.push({label:'Offerta media €/mq',data:zd.map(z=>z.medMq||null),backgroundColor:'rgba(77,104,68,.7)',borderRadius:4,borderSkipped:false});
+        _cLive=new Chart(ctx2,{type:'bar',data:{labels:zd.map(z=>z.nome.length>13?z.nome.split(' ').pop():z.nome),datasets:ds},
+          options:_chartOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+(c.parsed.y||0).toLocaleString('it-IT')+' €/mq'}}},scales:{y:{ticks:{callback:v=>v+'€'}}}})});
+      }
+    }
+  }catch(e){
+    if(wrap)wrap.innerHTML=`<div style="color:var(--muted);font-size:13px;padding:20px;text-align:center">Dati live non disponibili — ${e.message}<br><button class="btn btn-g btn-sm" style="margin-top:10px" onclick="_mercatoLiveReset();_loadMercatoLive()">⟳ Riprova</button></div>`;
+  }
 }
 
 
@@ -783,17 +870,15 @@ function moveLead(id,d){const l=leads.find(x=>x.id===id);const idx=FASI.findInde
   const ni=Math.max(0,Math.min(FASI.length-1,idx+d));l.fase=FASI[ni][0];persist();render();}
 
 /* ---------- ANNUNCI & MERCATO ---------- */
-let mapAnn=null, annunciTab='live'; // 'manual' | 'live' | 'portali'
+let mapAnn=null, annunciTab='live'; // 'live' | 'manual'
 function vAnnunci(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';_annunciLiveCache=null;caricaAnnunciLive()">📡 Annunci live</button>
-      <button class="btn ${annunciTab==='portali'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='portali';renderPortaliLink()">🔗 Portali</button>
+      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">📡 Live (30g)</button>
       <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei</button>
       ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋</button>`:''}
     </div>`;
   if(annunciTab==='live'){ caricaAnnunciLive(); return; }
-  if(annunciTab==='portali'){ renderPortaliLink(); return; }
   const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
   document.getElementById('view').innerHTML=`
     <div class="note" style="margin-bottom:18px">Inserisci manualmente gli annunci che noti sul territorio (da privati, colleghi, segnalazioni). Usa <b>Annunci live</b> per caricare gli annunci attivi da Immobiliare.it divisi per quartiere.</div>
@@ -834,184 +919,154 @@ function annToLead(id){
   persist();alert('Lead creato nella pipeline acquisizione!');
 }
 
-/* --- Finestre portali embedded --- */
-const PORTALI_CFG=[
-  {id:'immobiliare',nome:'Immobiliare.it',color:'#e8392a',icon:'🏠',
-   url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/'},
-  {id:'idealista',nome:'Idealista',color:'#006699',icon:'🔍',
-   url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/'},
-  {id:'casa',nome:'Casa.it',color:'#ff6633',icon:'🏡',
-   url:'https://www.casa.it/vendita/residenziale/busto-arsizio/'},
-  {id:'wikicasa',nome:'Wikicasa',color:'#28a745',icon:'📊',
-   url:'https://www.wikicasa.it/vendita-case/busto-arsizio/'}
-];
-let _portaleCur='immobiliare';
-/* Portali: link diretti (niente iframe — i portali usano Cloudflare e non sono embeddabili) */
-function renderPortaliLink(){
-  const portali=[
-    {nome:'Immobiliare.it',url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/',color:'#e8392a',icon:'🏠',desc:'Il portale più grande in Italia'},
-    {nome:'Idealista',     url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/',  color:'#0066cc',icon:'🔍',desc:'Forte presenza in Lombardia'},
-    {nome:'Casa.it',       url:'https://www.casa.it/vendita/residenziale/busto-arsizio/',       color:'#ff6633',icon:'🏡',desc:'Buono per zone periferiche'},
-    {nome:'Wikicasa',      url:'https://www.wikicasa.it/vendita-case/busto-arsizio/',           color:'#28a745',icon:'📊',desc:'Dati di mercato integrati'},
-    {nome:'Subito.it',     url:'https://www.subito.it/immobili/vendita/appartamenti/lombardia/annunci-busto-arsizio/',color:'#f39c12',icon:'⚡',desc:'Privati e piccole agenzie'},
-    {nome:'Trovacasa',     url:'https://www.trovacasa.net/vendita_case_busto_arsizio.html',     color:'#9b59b6',icon:'🔎',desc:'Aggregatore regionale'},
-  ];
-  document.getElementById('view').innerHTML=`
-    <div style="background:#f8f9ff;border:1px solid #dce0f0;border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px;color:#2a3060;line-height:1.6">
-      🔗 <b>Accesso diretto ai portali</b> — Si aprono nel browser in nuova scheda.<br>
-      <span style="color:#5a6880;font-size:12px">Usa la tab <b>📡 Annunci live</b> per vedere gli annunci aggregati direttamente in CasaBusto senza uscire dall'app.</span>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
-      ${portali.map(p=>`
-        <a href="${p.url}" target="_blank" rel="noopener" style="text-decoration:none">
-          <div class="card" style="padding:16px;border-top:3px solid ${p.color};transition:transform .15s,box-shadow .15s;cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-              <span style="font-size:20px">${p.icon}</span>
-              <span style="font-weight:700;font-size:14px;color:var(--ink)">${p.nome}</span>
-            </div>
-            <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${p.desc}</div>
-            <div style="font-size:12px;font-weight:600;color:${p.color}">Cerca a Busto Arsizio ↗</div>
-          </div>
-        </a>`).join('')}
-    </div>
-    <div style="text-align:center;margin-bottom:16px">
-      <button class="btn btn-p" onclick="annunciTab='live';_annunciLiveCache=null;caricaAnnunciLive()">
-        📡 Carica annunci live direttamente qui →
-      </button>
-      <div style="font-size:12px;color:var(--muted);margin-top:8px">Aggrega gli annunci da Immobiliare.it e mostra le schede senza uscire dall'app</div>
-    </div>`;
-}
+/* ---------- ANNUNCI LIVE (RSS) ---------- */
+let _annunciLiveCache=null, _cZoneAnn=null;
 
-/* --- Annunci LIVE (RSS proxy server) --- */
-let _annunciLiveCache=null;
 async function caricaAnnunciLive(){
   annunciTab='live';
-  // Aggiorna topAct mantenendo i tab + aggiunge reload
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn btn-p btn-sm">📡 Annunci live</button>
-      <button class="btn btn-g btn-sm" onclick="annunciTab='portali';renderPortaliLink()">🔗 Portali</button>
+      <button class="btn btn-p btn-sm">📡 Live (30g)</button>
       <button class="btn btn-g btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei</button>
-      <button class="btn btn-g btn-sm" style="margin-left:6px" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Ricarica</button>
+      <button class="btn btn-g btn-sm" style="margin-left:4px" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Aggiorna</button>
     </div>`;
-  if(_annunciLiveCache){ renderAnnunciLive(_annunciLiveCache); return; }
+  if(_annunciLiveCache){renderAnnunciLive(_annunciLiveCache);return;}
   document.getElementById('view').innerHTML=`
     <div style="text-align:center;padding:52px 20px">
       <div style="width:36px;height:36px;border:3px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin:0 auto 16px"></div>
-      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Caricamento annunci live…</div>
-      <div style="font-size:13px;color:var(--muted)">Recupero RSS da Immobiliare.it · Busto Arsizio</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Recupero annunci ultimi 30 giorni…</div>
+      <div style="font-size:13px;color:var(--muted)">RSS da Immobiliare.it + Wikicasa · Busto Arsizio</div>
     </div>`;
   try{
     const r=await fetch('/api/annunci-live',{credentials:'same-origin',headers:authHeaders()});
-    if(!r.ok) throw new Error('HTTP '+r.status);
-    const data=await r.json();
-    _annunciLiveCache=data;
-    renderAnnunciLive(data);
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    _annunciLiveCache=await r.json();
+    renderAnnunciLive(_annunciLiveCache);
   }catch(e){
     document.getElementById('view').innerHTML=`<div class="card">
-      <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d);margin-bottom:16px">
-        <b>⚠️ Caricamento fallito:</b> ${e.message}<br>
-        <span style="font-size:12px">Immobiliare.it potrebbe star limitando le richieste. Riprova tra qualche minuto.</span>
+      <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d)">
+        <b>⚠️ Errore RSS:</b> ${e.message}<br>
+        <span style="font-size:12px">Riprova tra qualche minuto.</span>
       </div>
-      <div style="font-weight:600;margin-bottom:12px;font-size:14px">Vai direttamente ai portali:</div>
-      ${portalLinks()}</div>`;
+      <button class="btn btn-g btn-sm" style="margin-top:12px" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Riprova</button>
+    </div>`;
   }
 }
-function portalLinks(portali){
-  const ps=portali||[
-    {nome:'Immobiliare.it',url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/',color:'#e8392a'},
-    {nome:'Idealista',     url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/',  color:'#006699'},
-    {nome:'Casa.it',       url:'https://www.casa.it/vendita/residenziale/busto-arsizio/',       color:'#ff6633'},
-    {nome:'Wikicasa',      url:'https://www.wikicasa.it/vendita-case/busto-arsizio/',           color:'#28a745'},
-  ];
-  return `<div class="grid g4" style="margin-top:16px">
-    ${ps.map(p=>`<a href="${p.url}" target="_blank" style="text-decoration:none">
-      <div class="card" style="text-align:center;padding:16px 12px;border-top:3px solid ${p.color}">
-        <div style="font-weight:700;font-size:13.5px;color:var(--ink);margin-bottom:4px">${p.nome}</div>
-        <div style="font-size:11px;color:var(--muted)">Apri ricerca →</div>
-      </div></a>`).join('')}
-  </div>`;
-}
+
 function renderAnnunciLive(data){
-  if(!data){
-    document.getElementById('view').innerHTML=`<div class="note">Premi <b>Annunci live</b> per caricare gli annunci da Immobiliare.it.</div>${portalLinks()}`;
-    return;
-  }
-  // raggruppa per zona
-  const byZone={};
-  for(const a of data.annunci){
-    if(!byZone[a.zona]) byZone[a.zona]=[];
-    byZone[a.zona].push(a);
-  }
-  const known=ZONE.map(z=>z.n).filter(n=>byZone[n]);
-  const nd=byZone['N/D']||[];
-  // stats
-  const withPrice=data.annunci.filter(a=>a.prezzo>0);
-  const avgPrice=withPrice.length?Math.round(withPrice.reduce((s,a)=>s+a.prezzo,0)/withPrice.length/1000)*1000:0;
-  const ts=new Date(data.ts);
-  const age=Math.round((Date.now()-ts)/60000);
+  if(!data?.annunci){document.getElementById('view').innerHTML='<div class="note">Dati non disponibili.</div>';return;}
+  const DAYS=30;
+  const nuovi=data.annunci.filter(a=>a.daysAgo!==null&&a.daysAgo!==undefined&&a.daysAgo<=DAYS);
+  // conta per zona (su tutti gli annunci, non solo ultimi 30g)
+  const zStats=data.zoneStats||{};
+  const zoneList=ZONE.map(z=>({nome:z.n,...(zStats[z.n]||{count:0,new30:0,vendita:0,affitto:0,medMq:0})}))
+    .filter(z=>z.count>0).sort((a,b)=>b.count-a.count);
+  const activeZones=zoneList.filter(z=>z.nome!=='N/D');
+  const age=Math.round((Date.now()-new Date(data.ts))/60000);
+
+  if(_cZoneAnn){_cZoneAnn.destroy();_cZoneAnn=null;}
+
   document.getElementById('view').innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
-      <div class="note" style="flex:1;min-width:200px">
-        <b>${data.totale}</b> annunci trovati su Immobiliare.it ·
-        <b>${known.length}</b> zone coperte ·
-        aggiornato ${age<2?'ora':age+' min fa'}
+    <!-- KPI -->
+    <div class="grid g4" style="margin-bottom:22px">
+      ${stat('Nuovi (ultimi 30g)', nuovi.filter(a=>a.zona!=='N/D').length, 'annunci recenti per zona', '⚲')}
+      ${stat('Zone attive', activeZones.filter(z=>z.new30>0).length, 'quartieri con nuovi annunci', '◎')}
+      ${stat('Portafoglio totale', data.totale, 'annunci attivi su RSS', '📋')}
+      ${stat('Aggiornamento', age<2?'adesso':age+'min fa', 'Immobiliare.it · Wikicasa', '⟳')}
+    </div>
+
+    <!-- Grafico + tabella zone -->
+    <div class="card" style="margin-bottom:22px">
+      <div class="sect-t"><span class="bar"></span>Annunci attivi per zona OMI</div>
+      <div style="position:relative;height:150px;margin-bottom:18px"><canvas id="cZoneAnn"></canvas></div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px">
+        ${activeZones.map(z=>`
+          <div style="background:var(--paper);border:1px solid ${z.new30>0?'var(--terra)':'var(--line)'};border-radius:9px;padding:10px 12px;transition:box-shadow var(--t)">
+            <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${z.nome}</div>
+            <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--ink);line-height:1">${z.count}</div>
+            <div style="font-size:10.5px;color:${z.new30>0?'var(--terra)':'var(--muted)'};margin-top:2px;font-weight:${z.new30>0?700:400}">
+              ${z.new30>0?`▲ ${z.new30} nuovi ≤30g`:'nessuno recente'}
+            </div>
+            ${z.medMq?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${z.medMq.toLocaleString('it-IT')} €/mq</div>`:''}
+          </div>`).join('')}
       </div>
     </div>
-    <!-- Portali link -->
-    ${portalLinks(data.portali)}
-    <!-- Statistiche -->
-    <div class="grid g3" style="margin:20px 0">
-      ${stat('Annunci trovati',data.totale,'da Immobiliare.it (vendita + affitto)','⚲')}
-      ${stat('Prezzo medio vendita',avgPrice?eur(avgPrice):'—','annunci con prezzo','€')}
-      ${stat('Zone con annunci',known.length,'quartieri di Busto','◎')}
+
+    <!-- Annunci recenti per zona -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+      <div class="sect-t" style="margin:0"><span class="bar"></span>Nuovi ultimi ${DAYS} giorni</div>
+      <div style="font-size:12px;color:var(--muted)">${nuovi.length} annunci · ${nuovi.filter(a=>a.contratto==='vendita').length} vendita · ${nuovi.filter(a=>a.contratto==='affitto').length} affitto</div>
     </div>
-    <!-- Per zona (ordine valore OMI decrescente) -->
-    ${known.map(n=>{
-      const list=byZone[n];
+    ${nuovi.length===0?`<div class="card"><div class="empty">Nessun annuncio con data negli ultimi ${DAYS} giorni.<br><span style="font-size:12px;color:var(--muted)">I feed RSS non sempre includono le date di pubblicazione.</span></div></div>`:''}
+    ${ZONE.map(z=>{
+      const list=nuovi.filter(a=>a.zona===z.n);
+      if(!list.length)return '';
       const prezzi=list.filter(a=>a.prezzo>0&&a.contratto==='vendita').map(a=>a.prezzo);
       const med=prezzi.length?Math.round(prezzi.reduce((s,p)=>s+p,0)/prezzi.length/1000)*1000:0;
-      return `<div class="card" style="margin-bottom:16px">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <div class="sect-t" style="margin:0"><span class="bar"></span>${n}</div>
-          <div style="display:flex;gap:14px;font-size:12px;color:var(--muted);flex-wrap:wrap;text-align:right">
-            ${omi[n]?`<span><b style="color:var(--terra)">${omi[n]} €/mq</b> valore OMI</span>`:''}
-            <span><b>${list.length}</b> annunci</span>
-            ${med?`<span>prezzo medio <b style="color:var(--ink)">${eur(med)}</b></span>`:''}
+      return `<div class="card" style="margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:6px">
+          <div class="sect-t" style="margin:0"><span class="bar"></span>${z.n}</div>
+          <div style="font-size:11.5px;color:var(--muted)">
+            ${omi[z.n]?`<b style="color:var(--terra)">${omi[z.n]} €/mq</b> OMI · `:''}
+            <b>${list.length}</b> nuovi
+            ${med?` · media <b>${eur(med)}</b>`:''}
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
-          ${list.map(a=>`<div style="border:1px solid var(--line);border-radius:10px;padding:13px;background:var(--paper);display:flex;flex-direction:column;gap:6px">
-            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-              <div style="font-weight:700;font-size:13px">${a.tipo}${a.mq?' · '+a.mq+' mq':''}</div>
-              <span class="tag" style="background:${a.contratto==='affitto'?'#edf0f5':'var(--terra-l)'};color:${a.contratto==='affitto'?'var(--slate)':'var(--terra-d)'};white-space:nowrap">${a.contratto}</span>
-            </div>
-            <div style="font-size:15px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif">${a.prezzo?eur(a.prezzo):'Prezzo su richiesta'}</div>
-            ${a.mq&&a.prezzo?`<div style="font-size:11px;color:var(--muted)">${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq stimato</div>`:''}
-            <div style="font-size:11.5px;color:var(--muted);line-height:1.5;flex:1">${(a.desc||a.titolo||'').slice(0,150)}</div>
-            <div style="display:flex;gap:6px;margin-top:4px">
-              <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Vedi ↗</a>
-              <button class="btn btn-p btn-sm" data-tipo="${a.tipo}" data-zona="${n}" data-mq="${a.mq||0}" data-prezzo="${a.prezzo||0}" data-fonte="${a.fonte}" onclick="annuncioLiveToLead(this)">＋ Lead</button>
-            </div>
-          </div>`).join('')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+          ${list.map(a=>_annuncioCard(a)).join('')}
         </div>
-      </div>`}).join('')}
-    ${nd.length?`<div class="card"><div class="sect-t"><span class="bar"></span>Zona non determinata</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px">
-        ${nd.map(a=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--paper)">
-          <div style="font-weight:700;font-size:13px">${a.tipo}${a.mq?' · '+a.mq+' mq':''}</div>
-          <div style="font-size:14px;font-weight:700;color:var(--terra);margin:4px 0">${a.prezzo?eur(a.prezzo):'—'}</div>
-          <div style="font-size:11.5px;color:var(--muted);line-height:1.5;margin-bottom:8px">${(a.titolo||'').slice(0,120)}</div>
-          <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">Vedi ↗</a>
-        </div>`).join('')}
-      </div></div>`:''}`;
+      </div>`;
+    }).join('')}
+    ${nuovi.filter(a=>a.zona==='N/D').length?`<div class="card">
+      <div class="sect-t" style="margin-bottom:12px"><span class="bar"></span>Zona non identificata</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+        ${nuovi.filter(a=>a.zona==='N/D').map(a=>_annuncioCard(a)).join('')}
+      </div>
+    </div>`:''}`;
+
+  // Chart zone
+  if(window.Chart){
+    const ctx=document.getElementById('cZoneAnn');
+    if(ctx){
+      _cZoneAnn=new Chart(ctx,{type:'bar',
+        data:{labels:activeZones.map(z=>z.nome.length>13?z.nome.split(' ').pop():z.nome),
+          datasets:[
+            {label:'Totale attivi',data:activeZones.map(z=>z.count-z.new30),backgroundColor:'rgba(192,87,43,.18)',borderRadius:0,stack:'s',borderSkipped:false},
+            {label:'Ultimi 30g',data:activeZones.map(z=>z.new30),backgroundColor:'#c0572b',borderRadius:4,stack:'s',borderSkipped:false}
+          ]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{position:'top',labels:{boxWidth:10,font:{family:'Archivo',size:10}}},tooltip:{mode:'index',callbacks:{title:t=>activeZones[t[0].dataIndex]?.nome}}},
+          scales:{x:{stacked:true,ticks:{font:{size:9}},grid:{display:false}},y:{stacked:true,ticks:{stepSize:1,font:{size:10}},grid:{color:'rgba(0,0,0,.05)'}}}}
+      });
+    }
+  }
 }
+
+function _annuncioCard(a){
+  const dl=a.daysAgo===0?'Oggi':a.daysAgo===1?'Ieri':a.daysAgo!==null?a.daysAgo+'g fa':'—';
+  const fresh=a.daysAgo!==null&&a.daysAgo<=3;
+  return `<div style="border:1.5px solid ${fresh?'var(--terra)':'var(--line)'};border-radius:10px;padding:12px;background:${fresh?'var(--terra-l)':'var(--paper)'};display:flex;flex-direction:column;gap:5px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+      <span style="font-weight:700;font-size:12.5px;line-height:1.3">${a.tipo}${a.mq?' · '+a.mq+'mq':''}</span>
+      <span style="font-size:10px;background:${a.daysAgo===0?'var(--terra)':'transparent'};color:${a.daysAgo===0?'#fff':'var(--terra)'};border:1px solid var(--terra);border-radius:20px;padding:2px 7px;font-weight:700;white-space:nowrap;flex-shrink:0">${dl}</span>
+    </div>
+    <div style="font-size:16px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif;line-height:1">${a.prezzo?eur(a.prezzo):'Su richiesta'}</div>
+    ${a.mq&&a.prezzo?`<div style="font-size:10.5px;color:var(--muted)">${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq · ${a.fonte}</div>`:`<div style="font-size:10.5px;color:var(--muted)">${a.fonte}</div>`}
+    <div style="font-size:11px;color:var(--slate);line-height:1.5;flex:1">${(a.titolo||'').slice(0,110)}</div>
+    <div style="display:flex;gap:5px;margin-top:4px">
+      <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none;flex:1;justify-content:center">Vedi ↗</a>
+      <button class="btn btn-p btn-sm" data-tipo="${a.tipo}" data-zona="${a.zona}" data-mq="${a.mq||0}" data-prezzo="${a.prezzo||0}" data-fonte="${a.fonte}" onclick="annuncioLiveToLead(this)" style="flex:1;justify-content:center">＋ Lead</button>
+    </div>
+  </div>`;
+}
+
 function annuncioLiveToLead(btn){
-  const {tipo,zona,mq,prezzo,fonte}=btn.dataset;
+  const{tipo,zona,mq,prezzo,fonte}=btn.dataset;
   leads.push({id:uid(),nome:`${tipo} ${zona}`,zona,tel:'',fonte:fonte||'Immobiliare.it',fase:'valutazione',
     note:`Da ${fonte}: ${mq>0?mq+'mq, ':''}${prezzo>0?eur(+prezzo):'prezzo n.d.'}`,createdAt:new Date().toISOString()});
   persist();btn.textContent='✓ Creato';btn.disabled=true;
 }
+
 
 /* ---------- ASTE GIUDIZIARIE ---------- */
 let mapAste=null;

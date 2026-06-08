@@ -379,10 +379,10 @@ app.get("/api/annunci-live", requireLogin, async (req,res)=>{
   const feeds=[
     {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/",contratto:"vendita"},
     {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-affitto/busto-arsizio-varese/",contratto:"affitto"},
-    // Feed zone limitrofe per completezza
     {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/?prezzoMassimo=300000",contratto:"vendita"},
     {nome:"Wikicasa.it",url:"https://www.wikicasa.it/rss/vendita/busto-arsizio/",contratto:"vendita"}
   ];
+  const now=Date.now();
   for(const feed of feeds){
     try{
       const r=await fetch(feed.url,{
@@ -406,17 +406,33 @@ app.get("/api/annunci-live", requireLogin, async (req,res)=>{
         const zona=detectZonaBusto(full)||"N/D";
         const tm=titolo.match(/^(bilocale|trilocale|quadrilocale|quintilocale|monolocale|villa|attico|appartamento|casa|loft|rustico|mansarda|studio)/i);
         const tipo=tm?tm[1][0].toUpperCase()+tm[1].slice(1).toLowerCase():"Appartamento";
-        annunci.push({fonte:feed.nome,contratto:feed.contratto||"vendita",tipo,zona,mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate:pub,desc:desc.slice(0,200)});
+        // Calcola giorni dalla pubblicazione
+        const pubMs=pub?new Date(pub).getTime():0;
+        const daysAgo=(pubMs>0&&!isNaN(pubMs))?Math.max(0,Math.floor((now-pubMs)/(1000*60*60*24))):null;
+        annunci.push({fonte:feed.nome,contratto:feed.contratto||"vendita",tipo,zona,mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate:pub,daysAgo,desc:desc.slice(0,200)});
       }
     }catch(e){console.warn(`[annunci] ${feed.nome}:`,e.message);}
   }
-  const portali=[
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/vendita-case/busto-arsizio-varese/",color:"#e8392a"},
-    {nome:"Idealista",url:"https://www.idealista.it/vendita-case/busto-arsizio-varese/",color:"#006699"},
-    {nome:"Casa.it",url:"https://www.casa.it/vendita/residenziale/busto-arsizio/",color:"#ff6633"},
-    {nome:"Wikicasa",url:"https://www.wikicasa.it/vendita-case/busto-arsizio/",color:"#28a745"}
-  ];
-  res.json({ok:true,totale:annunci.length,annunci,portali,ts:new Date().toISOString()});
+
+  // Deduplicazione per link
+  const seen=new Set(); const uniq=annunci.filter(a=>{if(seen.has(a.link))return false;seen.add(a.link);return true;});
+
+  // Statistiche per zona
+  const zoneStats={};
+  for(const a of uniq){
+    const z=a.zona;
+    if(!zoneStats[z])zoneStats[z]={count:0,new30:0,vendita:0,affitto:0,prezziMq:[]};
+    zoneStats[z].count++;
+    if(a.daysAgo!==null&&a.daysAgo<=30)zoneStats[z].new30++;
+    if(a.contratto==="vendita")zoneStats[z].vendita++;else zoneStats[z].affitto++;
+    if(a.prezzo>0&&a.mq>40&&a.mq<500)zoneStats[z].prezziMq.push(Math.round(a.prezzo/a.mq));
+  }
+  for(const s of Object.values(zoneStats)){
+    s.medMq=s.prezziMq.length?Math.round(s.prezziMq.reduce((a,b)=>a+b,0)/s.prezziMq.length):0;
+    delete s.prezziMq;
+  }
+
+  res.json({ok:true,totale:uniq.length,annunci:uniq,zoneStats,ts:new Date().toISOString()});
 });
 
 // =================== STATIC ===================

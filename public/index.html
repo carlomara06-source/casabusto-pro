@@ -1515,31 +1515,45 @@ function vStrum(){
 
 
 function genText(){
-  const t=val('g_tipo'),z=val('g_zona'),mq=val('g_mq'),p=(+val('g_prezzo')).toLocaleString('it-IT'),
-    car=val('g_car').split(',').map(s=>s.trim()).filter(Boolean),dest=val('g_dest')||'Gentile proprietario',
-    o=omi[z];let out='';
+  // val() lancia TypeError se l'elemento non esiste — usiamo safeVal per i campi opzionali
+  const safeVal=id=>{const el=document.getElementById(id);return el?el.value:''};
+  const t=val('g_tipo'),z=val('g_zona'),mq=val('g_mq'),
+    p=(+val('g_prezzo')).toLocaleString('it-IT'),
+    car=val('g_car').split(',').map(s=>s.trim()).filter(Boolean),
+    dest=safeVal('g_dest')||'Gentile proprietario',
+    o=omi[z]||1600;
+  let out='';
   if(toolTab==='annuncio'){
+    const carStr=car.length?car.join(', '):'luminoso, ben tenuto';
     out=`${t.toUpperCase()} IN ${z.toUpperCase()} — ${mq} MQ\n\n`+
-    `Proponiamo in vendita ${t.toLowerCase()} di ${mq} mq nella zona di ${z}, Busto Arsizio.\n`+
-    `L'immobile si caratterizza per: ${car.join(', ')}.\n\n`+
-    `La zona di ${z} offre comodità ai servizi e buoni collegamenti. `+
-    `Soluzione ideale per chi cerca qualità in una delle aree più richieste della città.\n\n`+
-    `Prezzo richiesto: € ${p}.\nDisponibili per visite e maggiori informazioni.`;
+    `Proponiamo in vendita ${t.toLowerCase()} di ${mq} mq nella zona di ${z}, a Busto Arsizio.\n\n`+
+    `L'immobile si caratterizza per: ${carStr}.\n\n`+
+    `La zona ${z} è apprezzata per la comodità ai servizi, alle scuole e ai trasporti. `+
+    `Soluzione ideale per chi cerca qualità abitativa in una delle aree più richieste della città.\n\n`+
+    `📌 Prezzo richiesto: € ${p}\n`+
+    `📞 Per informazioni e visite siamo a disposizione.`;
   }else if(toolTab==='lettera'){
+    const carStr=car.length?`Dalle caratteristiche (${car.join(', ')}) emerge un immobile `:'L\'immobile si posiziona ';
     out=`${dest},\n\n`+
-    `mi occupo di intermediazione immobiliare nella zona di ${z} a Busto Arsizio e seguo con attenzione il mercato locale, attualmente valutato intorno ai ${o} €/mq.\n\n`+
-    `In questo periodo ho diverse richieste di acquirenti interessati a immobili come il Suo nella Sua zona. Se sta valutando, anche solo in prospettiva, la vendita del Suo immobile, sarei lieto di offrirLe una valutazione gratuita e senza impegno.\n\n`+
-    `Lavoro con trasparenza e un piano marketing dedicato per ogni incarico. La ringrazio per l'attenzione e resto a disposizione.\n\nCordiali saluti`;
+    `mi occupo di intermediazione immobiliare specializzato nella zona di ${z} a Busto Arsizio e monitoro costantemente il mercato locale, attualmente valutato intorno ai ${o} €/mq (fonte: OMI Agenzia delle Entrate).\n\n`+
+    `${carStr}con un profilo interessante per la domanda attuale. `+
+    `In questo momento ho diversi acquirenti qualificati in ricerca attiva in questa zona.\n\n`+
+    `Se sta valutando, anche solo in prospettiva, la vendita del Suo immobile, sarei lieto di offrirLe una valutazione gratuita, riservata e senza impegno direttamente a casa Sua.\n\n`+
+    `Lavoro con trasparenza e un piano marketing dedicato per ogni incarico: fotografia professionale, pubblicazione sui principali portali immobiliari e accompagnamento in tutte le fasi.\n\n`+
+    `La ringrazio per l'attenzione e resto a Sua completa disposizione.\n\nCordiali saluti`;
   }else{
-    out=`SCRIPT — primo contatto telefonico\n\n`+
-    `"Buongiorno, parlo con ${dest}? Sono [Nome], agente immobiliare specializzato nella zona di ${z}.\n\n`+
-    `La contatto perché in questo momento ho acquirenti realmente interessati a immobili in questa zona, dove i valori si aggirano sui ${o} €/mq.\n\n`+
-    `Le rubo solo un minuto: sta valutando, anche in futuro, la vendita del Suo immobile?"\n\n`+
-    `→ SE SÌ: "Perfetto, posso passare per una valutazione gratuita: preferisce un giorno feriale o il weekend?"\n`+
-    `→ SE FORSE: "Capisco. Le lascio i miei contatti e Le invio una valutazione di massima, così ha un riferimento quando vorrà."\n`+
-    `→ SE NO: "Nessun problema, La ringrazio. Se conosce qualcuno interessato, sarò felice di aiutare."`;
+    out=`SCRIPT — primo contatto telefonico\n`+
+    `────────────────────────────────────\n\n`+
+    `"Buongiorno, parlo con ${dest}?\n`+
+    `Sono [Nome], agente immobiliare specializzato nella zona di ${z} a Busto Arsizio.\n\n`+
+    `La contatto perché in questo momento ho acquirenti realmente motivati che cercano immobili in questa zona, dove i valori di mercato si aggirano sui ${o} €/mq.\n\n`+
+    `Le rubo solo un minuto: sta valutando, anche solo in prospettiva futura, la possibilità di vendere il Suo immobile?"\n\n`+
+    `→ SE SÌ: "Perfetto! Le proporrei un sopralluogo gratuito per una stima aggiornata. Preferisce un giorno feriale o il weekend?"\n\n`+
+    `→ SE FORSE / CI PENSO: "Capisco perfettamente. Potrei inviarLe intanto una valutazione orientativa via email, così ha un riferimento concreto per ragionare. Mi lascia un indirizzo?"\n\n`+
+    `→ SE NO: "Nessun problema, la ringrazio della franchezza. Se in futuro cambia prospettiva, oppure se conosce qualcuno nella stessa situazione, sono a disposizione. Buona giornata!"`;
   }
-  document.getElementById('out').textContent=out;
+  const outEl=document.getElementById('out');
+  if(outEl)outEl.textContent=out;
 }
 
 /* ---------- MODALI ---------- */

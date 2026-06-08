@@ -359,7 +359,7 @@ Rispondi SEMPRE con JSON valido e compatto, senza markdown, senza backtick, con 
   }
 });
 
-// =================== ANNUNCI LIVE (RSS) ===================
+// =================== ANNUNCI LIVE (Subito.it scraping) ===================
 const ZONE_BUSTO=["Centro","Tribunale","Sant'Edoardo","Sant'Anna","Santissimi Apostoli","San Michele","Madonna Regina","Redentore","Beata Giuliana","Borsano","Sacconago"];
 function detectZonaBusto(text){
   const t=(text||"").toLowerCase();
@@ -368,71 +368,95 @@ function detectZonaBusto(text){
   for(const[via,zona]of Object.entries(viaMap)){if(t.includes(via))return zona;}
   return null;
 }
-function xmlGet(item,tag){
-  const m=item.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?<\\/${tag}>`,"i"));
-  return(m?.[1]||"").replace(/<[^>]+>/g," ").replace(/\s+/g," ").trim();
+
+// Subito.it usa Next.js — i dati listing sono nel JSON __NEXT_DATA__ embeddato
+function parseSubitoPage(html, contratto){
+  const m=html.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]*?)<\/script>/);
+  if(!m)return[];
+  let state;
+  try{const d=JSON.parse(m[1]);state=d?.props?.pageProps?.initialState;}catch{return[];}
+  const raw=state?.items?.originalList||[];
+  const RESI=['Appartamenti','Ville singole e a schiera','Case indipendenti','Mansarde','Nuove Costruzioni'];
+  const now=Date.now();
+  const annunci=[];
+  for(const it of raw){
+    if(it?.kind!=='AdItem')continue;
+    if(!RESI.includes(it.category?.label))continue;
+    const feat=it.features||{};
+    // Prezzo: feature /price (vendita: "165000 €", affitto: "900 €")
+    const priceRaw=feat['/price']?.values?.[0]?.value||feat['/price']?.values?.[0]?.key||'';
+    let prezzo=0;
+    if(priceRaw){const v=parseInt(String(priceRaw).replace(/[^0-9]/g,''),10);if(v>0)prezzo=v;}
+    // mq: feature /size (es. "75 mq")
+    const sizeRaw=feat['/size']?.values?.[0]?.value||feat['/size']?.values?.[0]?.key||'';
+    const mq=sizeRaw?parseInt(String(sizeRaw).replace(/[^0-9]/g,''),10):0;
+    // Data pubblicazione → daysAgo reale
+    const pubDate=it.date||null;
+    const pubMs=pubDate?new Date(pubDate).getTime():0;
+    const daysAgo=(pubMs>0&&!isNaN(pubMs))?Math.max(0,Math.floor((now-pubMs)/(1000*60*60*24))):null;
+    const titolo=it.subject||'';
+    const link=it.urls?.default||'';
+    if(!link)continue;
+    const tipoM=titolo.match(/^(bilocale|trilocale|quadrilocale|quintilocale|monolocale|villa|attico|appartamento|casa|loft|rustico|mansarda)/i);
+    const catTipoMap={'Appartamenti':'Appartamento','Ville singole e a schiera':'Villa','Case indipendenti':'Casa','Mansarde':'Mansarda','Nuove Costruzioni':'Nuova costruzione'};
+    const tipo=tipoM?tipoM[1][0].toUpperCase()+tipoM[1].slice(1).toLowerCase():(catTipoMap[it.category?.label]||'Appartamento');
+    const zona=detectZonaBusto(titolo)||detectZonaBusto(it.body||'')||'N/D';
+    annunci.push({id:it.urn||'',fonte:'Subito.it',contratto,tipo,zona,
+      mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate,daysAgo});
+  }
+  return annunci;
 }
 
+// Cache 30 min — Subito.it più frequente di Idealista
+let _annunciCache=null, _annunciCacheTs=0;
+const ANNUNCI_CACHE_TTL=30*60*1000;
+
 app.get("/api/annunci-live", requireLogin, async (req,res)=>{
+  if(_annunciCache&&Date.now()-_annunciCacheTs<ANNUNCI_CACHE_TTL){
+    return res.json(_annunciCache);
+  }
+
   const annunci=[];
-  // Feed RSS multipli — Immobiliare.it RSS NON è dietro Cloudflare, va con Chrome headers
-  const feeds=[
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/",contratto:"vendita"},
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-affitto/busto-arsizio-varese/",contratto:"affitto"},
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/?prezzoMassimo=300000",contratto:"vendita"},
-    {nome:"Wikicasa.it",url:"https://www.wikicasa.it/rss/vendita/busto-arsizio/",contratto:"vendita"}
+  const sources=[
+    {url:"https://www.subito.it/annunci-lombardia/vendita/immobili/varese/busto-arsizio/",contratto:"vendita"},
+    {url:"https://www.subito.it/annunci-lombardia/affitto/immobili/varese/busto-arsizio/",contratto:"affitto"},
   ];
-  const now=Date.now();
-  for(const feed of feeds){
+
+  for(const{url,contratto}of sources){
     try{
-      const r=await fetch(feed.url,{
-        headers:{...CHROME_HEADERS,
-          "Accept":"application/rss+xml,application/xml,text/xml,application/atom+xml,*/*;q=0.8",
-          "Cache-Control":"no-cache","Pragma":"no-cache"},
-        signal:AbortSignal.timeout(10000)
-      });
-      if(!r.ok){console.warn(`[annunci] ${feed.nome} HTTP ${r.status}`);continue;}
-      const xml=await r.text();
-      if(!xml.includes("<item>")){console.warn(`[annunci] no <item>`);continue;}
-      const items=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)];
-      for(const[,it]of items.slice(0,30)){
-        const titolo=xmlGet(it,"title"),desc=xmlGet(it,"description"),link=xmlGet(it,"link"),pub=xmlGet(it,"pubDate");
-        const full=titolo+" "+desc;
-        const pm=full.match(/(?:€|EUR)\s*([\d.,\s]{3,12})/i);
-        let prezzo=pm?parseInt(pm[1].replace(/[.,\s]/g,""),10):0;
-        if(prezzo<10000||prezzo>9000000)prezzo=0;
-        const am=full.match(/(\d{2,4})\s*m[²q2]/i);
-        const mq=am?parseInt(am[1],10):0;
-        const zona=detectZonaBusto(full)||"N/D";
-        const tm=titolo.match(/^(bilocale|trilocale|quadrilocale|quintilocale|monolocale|villa|attico|appartamento|casa|loft|rustico|mansarda|studio)/i);
-        const tipo=tm?tm[1][0].toUpperCase()+tm[1].slice(1).toLowerCase():"Appartamento";
-        // Calcola giorni dalla pubblicazione
-        const pubMs=pub?new Date(pub).getTime():0;
-        const daysAgo=(pubMs>0&&!isNaN(pubMs))?Math.max(0,Math.floor((now-pubMs)/(1000*60*60*24))):null;
-        annunci.push({fonte:feed.nome,contratto:feed.contratto||"vendita",tipo,zona,mq:mq||null,prezzo:prezzo||null,titolo,link,pubDate:pub,daysAgo,desc:desc.slice(0,200)});
-      }
-    }catch(e){console.warn(`[annunci] ${feed.nome}:`,e.message);}
+      const r=await fetch(url,{headers:CHROME_HEADERS,signal:AbortSignal.timeout(14000)});
+      if(!r.ok){console.warn(`[annunci] Subito.it HTTP ${r.status} ${url}`);continue;}
+      const html=await r.text();
+      if(!html.includes('__NEXT_DATA__')){console.warn(`[annunci] no Next.js JSON in ${url}`);continue;}
+      const parsed=parseSubitoPage(html,contratto);
+      console.log(`[annunci] ${url} → ${parsed.length} annunci`);
+      annunci.push(...parsed);
+    }catch(e){console.warn(`[annunci] ${url}:`,e.message);}
   }
 
   // Deduplicazione per link
-  const seen=new Set(); const uniq=annunci.filter(a=>{if(seen.has(a.link))return false;seen.add(a.link);return true;});
+  const seen=new Set();
+  const uniq=annunci.filter(a=>{if(seen.has(a.link))return false;seen.add(a.link);return true;});
 
   // Statistiche per zona
   const zoneStats={};
   for(const a of uniq){
     const z=a.zona;
-    if(!zoneStats[z])zoneStats[z]={count:0,new30:0,vendita:0,affitto:0,prezziMq:[]};
+    if(!zoneStats[z])zoneStats[z]={count:0,vendita:0,affitto:0,prezziMq:[]};
     zoneStats[z].count++;
-    if(a.daysAgo!==null&&a.daysAgo<=30)zoneStats[z].new30++;
     if(a.contratto==="vendita")zoneStats[z].vendita++;else zoneStats[z].affitto++;
-    if(a.prezzo>0&&a.mq>40&&a.mq<500)zoneStats[z].prezziMq.push(Math.round(a.prezzo/a.mq));
+    // Per €/mq: solo vendita con valori sensati
+    if(a.contratto==="vendita"&&a.prezzo>30000&&a.mq>30&&a.mq<500)
+      zoneStats[z].prezziMq.push(Math.round(a.prezzo/a.mq));
   }
   for(const s of Object.values(zoneStats)){
     s.medMq=s.prezziMq.length?Math.round(s.prezziMq.reduce((a,b)=>a+b,0)/s.prezziMq.length):0;
     delete s.prezziMq;
   }
 
-  res.json({ok:true,totale:uniq.length,annunci:uniq,zoneStats,ts:new Date().toISOString()});
+  const result={ok:true,totale:uniq.length,annunci:uniq,zoneStats,fonte:'Subito.it',ts:new Date().toISOString()};
+  _annunciCache=result; _annunciCacheTs=Date.now();
+  res.json(result);
 });
 
 // =================== STATIC ===================

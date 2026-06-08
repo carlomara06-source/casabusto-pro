@@ -874,7 +874,7 @@ let mapAnn=null, annunciTab='live'; // 'live' | 'manual'
 function vAnnunci(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">📡 Live (30g)</button>
+      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">📡 Live</button>
       <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei</button>
       ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋</button>`:''}
     </div>`;
@@ -955,11 +955,15 @@ async function caricaAnnunciLive(){
 
 function renderAnnunciLive(data){
   if(!data?.annunci){document.getElementById('view').innerHTML='<div class="note">Dati non disponibili.</div>';return;}
+  const fonte=data.fonte||'Idealista';
+  // Se abbiamo date reali filtra a 30g, altrimenti mostra tutto (Idealista non espone date statiche)
+  const hasDates=data.annunci.some(a=>a.daysAgo!==null);
   const DAYS=30;
-  const nuovi=data.annunci.filter(a=>a.daysAgo!==null&&a.daysAgo!==undefined&&a.daysAgo<=DAYS);
-  // conta per zona (su tutti gli annunci, non solo ultimi 30g)
+  const mostra=hasDates?data.annunci.filter(a=>a.daysAgo!==null&&a.daysAgo<=DAYS):data.annunci;
+  const labelListing=hasDates?`Nuovi ultimi ${DAYS} giorni`:`Annunci attivi su ${fonte}`;
+
   const zStats=data.zoneStats||{};
-  const zoneList=ZONE.map(z=>({nome:z.n,...(zStats[z.n]||{count:0,new30:0,vendita:0,affitto:0,medMq:0})}))
+  const zoneList=ZONE.map(z=>({nome:z.n,...(zStats[z.n]||{count:0,vendita:0,affitto:0,medMq:0})}))
     .filter(z=>z.count>0).sort((a,b)=>b.count-a.count);
   const activeZones=zoneList.filter(z=>z.nome!=='N/D');
   const age=Math.round((Date.now()-new Date(data.ts))/60000);
@@ -969,10 +973,10 @@ function renderAnnunciLive(data){
   document.getElementById('view').innerHTML=`
     <!-- KPI -->
     <div class="grid g4" style="margin-bottom:22px">
-      ${stat('Nuovi (ultimi 30g)', nuovi.filter(a=>a.zona!=='N/D').length, 'annunci recenti per zona', '⚲')}
-      ${stat('Zone attive', activeZones.filter(z=>z.new30>0).length, 'quartieri con nuovi annunci', '◎')}
-      ${stat('Portafoglio totale', data.totale, 'annunci attivi su RSS', '📋')}
-      ${stat('Aggiornamento', age<2?'adesso':age+'min fa', 'Immobiliare.it · Wikicasa', '⟳')}
+      ${stat('Annunci attivi', mostra.filter(a=>a.zona!=='N/D').length, fonte+' · Busto Arsizio', '⚲')}
+      ${stat('Zone', activeZones.length, 'quartieri con annunci', '◎')}
+      ${stat('In vendita', mostra.filter(a=>a.contratto==='vendita').length, 'unità disponibili ora', '🏠')}
+      ${stat('Aggiornamento', age<2?'adesso':age+'min fa', fonte, '⟳')}
     </div>
 
     <!-- Grafico + tabella zone -->
@@ -981,25 +985,23 @@ function renderAnnunciLive(data){
       <div style="position:relative;height:150px;margin-bottom:18px"><canvas id="cZoneAnn"></canvas></div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(145px,1fr));gap:8px">
         ${activeZones.map(z=>`
-          <div style="background:var(--paper);border:1px solid ${z.new30>0?'var(--terra)':'var(--line)'};border-radius:9px;padding:10px 12px;transition:box-shadow var(--t)">
+          <div style="background:var(--paper);border:1px solid var(--line);border-radius:9px;padding:10px 12px;transition:box-shadow var(--t)">
             <div style="font-size:11px;font-weight:700;color:var(--slate);margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${z.nome}</div>
             <div style="font-family:'Fraunces',serif;font-size:24px;font-weight:700;color:var(--ink);line-height:1">${z.count}</div>
-            <div style="font-size:10.5px;color:${z.new30>0?'var(--terra)':'var(--muted)'};margin-top:2px;font-weight:${z.new30>0?700:400}">
-              ${z.new30>0?`▲ ${z.new30} nuovi ≤30g`:'nessuno recente'}
-            </div>
-            ${z.medMq?`<div style="font-size:10px;color:var(--muted);margin-top:2px">${z.medMq.toLocaleString('it-IT')} €/mq</div>`:''}
+            <div style="font-size:10px;color:var(--muted);margin-top:3px">${z.vendita||0} vendita · ${z.affitto||0} affitto</div>
+            ${z.medMq?`<div style="font-size:10px;color:var(--terra);font-weight:700;margin-top:2px">${z.medMq.toLocaleString('it-IT')} €/mq</div>`:''}
           </div>`).join('')}
       </div>
     </div>
 
-    <!-- Annunci recenti per zona -->
+    <!-- Annunci per zona -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
-      <div class="sect-t" style="margin:0"><span class="bar"></span>Nuovi ultimi ${DAYS} giorni</div>
-      <div style="font-size:12px;color:var(--muted)">${nuovi.length} annunci · ${nuovi.filter(a=>a.contratto==='vendita').length} vendita · ${nuovi.filter(a=>a.contratto==='affitto').length} affitto</div>
+      <div class="sect-t" style="margin:0"><span class="bar"></span>${labelListing}</div>
+      <div style="font-size:12px;color:var(--muted)">${mostra.length} annunci · ${mostra.filter(a=>a.contratto==='vendita').length} vendita · ${mostra.filter(a=>a.contratto==='affitto').length} affitto</div>
     </div>
-    ${nuovi.length===0?`<div class="card"><div class="empty">Nessun annuncio con data negli ultimi ${DAYS} giorni.<br><span style="font-size:12px;color:var(--muted)">I feed RSS non sempre includono le date di pubblicazione.</span></div></div>`:''}
+    ${mostra.length===0?`<div class="card"><div class="empty">Nessun annuncio trovato.<br><span style="font-size:12px;color:var(--muted)">Controlla la connessione e riprova.</span></div></div>`:''}
     ${ZONE.map(z=>{
-      const list=nuovi.filter(a=>a.zona===z.n);
+      const list=mostra.filter(a=>a.zona===z.n);
       if(!list.length)return '';
       const prezzi=list.filter(a=>a.prezzo>0&&a.contratto==='vendita').map(a=>a.prezzo);
       const med=prezzi.length?Math.round(prezzi.reduce((s,p)=>s+p,0)/prezzi.length/1000)*1000:0;
@@ -1008,7 +1010,7 @@ function renderAnnunciLive(data){
           <div class="sect-t" style="margin:0"><span class="bar"></span>${z.n}</div>
           <div style="font-size:11.5px;color:var(--muted)">
             ${omi[z.n]?`<b style="color:var(--terra)">${omi[z.n]} €/mq</b> OMI · `:''}
-            <b>${list.length}</b> nuovi
+            <b>${list.length}</b> annunci
             ${med?` · media <b>${eur(med)}</b>`:''}
           </div>
         </div>
@@ -1017,22 +1019,22 @@ function renderAnnunciLive(data){
         </div>
       </div>`;
     }).join('')}
-    ${nuovi.filter(a=>a.zona==='N/D').length?`<div class="card">
+    ${mostra.filter(a=>a.zona==='N/D').length?`<div class="card">
       <div class="sect-t" style="margin-bottom:12px"><span class="bar"></span>Zona non identificata</div>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
-        ${nuovi.filter(a=>a.zona==='N/D').map(a=>_annuncioCard(a)).join('')}
+        ${mostra.filter(a=>a.zona==='N/D').map(a=>_annuncioCard(a)).join('')}
       </div>
     </div>`:''}`;
 
-  // Chart zone
+  // Chart zone — vendita vs affitto stacked
   if(window.Chart){
     const ctx=document.getElementById('cZoneAnn');
     if(ctx){
       _cZoneAnn=new Chart(ctx,{type:'bar',
         data:{labels:activeZones.map(z=>z.nome.length>13?z.nome.split(' ').pop():z.nome),
           datasets:[
-            {label:'Totale attivi',data:activeZones.map(z=>z.count-z.new30),backgroundColor:'rgba(192,87,43,.18)',borderRadius:0,stack:'s',borderSkipped:false},
-            {label:'Ultimi 30g',data:activeZones.map(z=>z.new30),backgroundColor:'#c0572b',borderRadius:4,stack:'s',borderSkipped:false}
+            {label:'Vendita',data:activeZones.map(z=>z.vendita||0),backgroundColor:'#c0572b',borderRadius:4,stack:'s',borderSkipped:false},
+            {label:'Affitto',data:activeZones.map(z=>z.affitto||0),backgroundColor:'rgba(192,87,43,.3)',borderRadius:4,stack:'s',borderSkipped:false}
           ]},
         options:{responsive:true,maintainAspectRatio:false,
           plugins:{legend:{position:'top',labels:{boxWidth:10,font:{family:'Archivo',size:10}}},tooltip:{mode:'index',callbacks:{title:t=>activeZones[t[0].dataIndex]?.nome}}},
@@ -1043,15 +1045,18 @@ function renderAnnunciLive(data){
 }
 
 function _annuncioCard(a){
-  const dl=a.daysAgo===0?'Oggi':a.daysAgo===1?'Ieri':a.daysAgo!==null?a.daysAgo+'g fa':'—';
+  const dl=a.daysAgo===0?'Oggi':a.daysAgo===1?'Ieri':a.daysAgo!==null?a.daysAgo+'g fa':'Live';
   const fresh=a.daysAgo!==null&&a.daysAgo<=3;
+  const isAffitto=a.contratto==='affitto';
+  const prezzoLabel=a.prezzo?(eur(a.prezzo)+(isAffitto?'<span style="font-size:11px;font-weight:400">/mese</span>':'')):'Su richiesta';
+  const mqLabel=(!isAffitto&&a.mq&&a.prezzo&&a.prezzo>30000)?`${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq · `:'';
   return `<div style="border:1.5px solid ${fresh?'var(--terra)':'var(--line)'};border-radius:10px;padding:12px;background:${fresh?'var(--terra-l)':'var(--paper)'};display:flex;flex-direction:column;gap:5px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-      <span style="font-weight:700;font-size:12.5px;line-height:1.3">${a.tipo}${a.mq?' · '+a.mq+'mq':''}</span>
+      <span style="font-weight:700;font-size:12.5px;line-height:1.3">${a.tipo}${a.mq?' · '+a.mq+'mq':''}${isAffitto?' · <span style="color:var(--terra)">Affitto</span>':''}</span>
       <span style="font-size:10px;background:${a.daysAgo===0?'var(--terra)':'transparent'};color:${a.daysAgo===0?'#fff':'var(--terra)'};border:1px solid var(--terra);border-radius:20px;padding:2px 7px;font-weight:700;white-space:nowrap;flex-shrink:0">${dl}</span>
     </div>
-    <div style="font-size:16px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif;line-height:1">${a.prezzo?eur(a.prezzo):'Su richiesta'}</div>
-    ${a.mq&&a.prezzo?`<div style="font-size:10.5px;color:var(--muted)">${Math.round(a.prezzo/a.mq).toLocaleString('it-IT')} €/mq · ${a.fonte}</div>`:`<div style="font-size:10.5px;color:var(--muted)">${a.fonte}</div>`}
+    <div style="font-size:16px;font-weight:700;color:var(--terra);font-family:'Fraunces',serif;line-height:1">${prezzoLabel}</div>
+    <div style="font-size:10.5px;color:var(--muted)">${mqLabel}${a.fonte}</div>
     <div style="font-size:11px;color:var(--slate);line-height:1.5;flex:1">${(a.titolo||'').slice(0,110)}</div>
     <div style="display:flex;gap:5px;margin-top:4px">
       <a href="${a.link}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none;flex:1;justify-content:center">Vedi ↗</a>

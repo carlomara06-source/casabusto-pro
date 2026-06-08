@@ -238,17 +238,18 @@ tr:hover td{background:var(--terra-l)}
    Borsino Immobiliare (2026). Media città ~1.800-2.000 €/mq, +6/+10% su anno.
    Aggiornabili dal pulsante "Aggiorna valori" nella Mappa. */
 const ZONE = [
-  {n:"Centro",            lat:45.6118, lng:8.8517, omi:2004},
-  {n:"Sant'Edoardo",      lat:45.6155, lng:8.8475, omi:1850},
-  {n:"Sant'Anna",         lat:45.6205, lng:8.8460, omi:1690},
-  {n:"Santissimi Apostoli",lat:45.6165, lng:8.8590, omi:1700},
-  {n:"San Michele",       lat:45.6050, lng:8.8600, omi:1700},
-  {n:"Madonna Regina",    lat:45.6175, lng:8.8650, omi:1650},
-  {n:"Beata Giuliana",    lat:45.6020, lng:8.8420, omi:1560},
-  {n:"Borsano",           lat:45.5930, lng:8.8260, omi:1453},
-  {n:"Sacconago",         lat:45.5980, lng:8.8550, omi:1479},
-  {n:"Redentore",         lat:45.6080, lng:8.8380, omi:1620},
-  {n:"Tribunale",         lat:45.6090, lng:8.8560, omi:1900}
+  // Coordinate verificate su Google Maps / OpenStreetMap — centri dei quartieri OMI Busto Arsizio
+  {n:"Centro",              lat:45.6118, lng:8.8517, omi:2004}, // Piazza San Giovanni / Corso XX Settembre
+  {n:"Tribunale",           lat:45.6097, lng:8.8598, omi:1900}, // Via Luigi Cadorna / Palazzo di Giustizia
+  {n:"Sant'Edoardo",        lat:45.6160, lng:8.8445, omi:1850}, // Via Mameli / Via Fratelli Rosselli
+  {n:"Sant'Anna",           lat:45.6220, lng:8.8462, omi:1690}, // Via Foscolo / Via Leopardi (nord)
+  {n:"Santissimi Apostoli", lat:45.6148, lng:8.8618, omi:1700}, // Via Mentana / nord-est
+  {n:"San Michele",         lat:45.6042, lng:8.8552, omi:1700}, // Via San Michele / zona stazione FS
+  {n:"Madonna Regina",      lat:45.6182, lng:8.8690, omi:1650}, // Via Madonna Regina / est
+  {n:"Redentore",           lat:45.6073, lng:8.8355, omi:1620}, // Via Redentore / ovest
+  {n:"Beata Giuliana",      lat:45.6008, lng:8.8385, omi:1560}, // Via Beata Giuliana / sud-ovest
+  {n:"Borsano",             lat:45.5908, lng:8.8192, omi:1453}, // Frazione Borsano — Via XXV Aprile
+  {n:"Sacconago",           lat:45.5975, lng:8.8660, omi:1479}  // Frazione Sacconago — Via Sacconago
 ];
 /* Indicatori di mercato città reali (fonte: Borsino Immobiliare 2026) */
 const MERCATO = {
@@ -812,17 +813,17 @@ function moveLead(id,d){const l=leads.find(x=>x.id===id);const idx=FASI.findInde
   const ni=Math.max(0,Math.min(FASI.length-1,idx+d));l.fase=FASI[ni][0];persist();render();}
 
 /* ---------- ANNUNCI & MERCATO ---------- */
-let mapAnn=null, annunciTab='portali'; // 'manual' | 'live' | 'portali'
+let mapAnn=null, annunciTab='live'; // 'manual' | 'live' | 'portali'
 function vAnnunci(){
   document.getElementById('topAct').innerHTML=`
     <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
-      <button class="btn ${annunciTab==='portali'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='portali';vAnnunci()">🖥 Portali live</button>
-      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';caricaAnnunciLive()">📋 Riepilogo live</button>
-      <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei annunci</button>
+      <button class="btn ${annunciTab==='live'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='live';_annunciLiveCache=null;caricaAnnunciLive()">📡 Annunci live</button>
+      <button class="btn ${annunciTab==='portali'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='portali';renderPortaliLink()">🔗 Portali</button>
+      <button class="btn ${annunciTab==='manual'?'btn-p':'btn-g'} btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei</button>
       ${annunciTab==='manual'?`<button class="btn btn-p btn-sm" onclick="modalAnnuncio()">＋</button>`:''}
     </div>`;
-  if(annunciTab==='portali'){ renderPortaliFinestre(); return; }
   if(annunciTab==='live'){ caricaAnnunciLive(); return; }
+  if(annunciTab==='portali'){ renderPortaliLink(); return; }
   const vuoti=annunci.filter(a=>a.stato==='vuoto').length;
   document.getElementById('view').innerHTML=`
     <div class="note" style="margin-bottom:18px">Inserisci manualmente gli annunci che noti sul territorio (da privati, colleghi, segnalazioni). Usa <b>Annunci live</b> per caricare gli annunci attivi da Immobiliare.it divisi per quartiere.</div>
@@ -875,99 +876,61 @@ const PORTALI_CFG=[
    url:'https://www.wikicasa.it/vendita-case/busto-arsizio/'}
 ];
 let _portaleCur='immobiliare';
-function renderPortaliFinestre(){
+/* Portali: link diretti (niente iframe — i portali usano Cloudflare e non sono embeddabili) */
+function renderPortaliLink(){
+  const portali=[
+    {nome:'Immobiliare.it',url:'https://www.immobiliare.it/vendita-case/busto-arsizio-varese/',color:'#e8392a',icon:'🏠',desc:'Il portale più grande in Italia'},
+    {nome:'Idealista',     url:'https://www.idealista.it/vendita-case/busto-arsizio-varese/',  color:'#0066cc',icon:'🔍',desc:'Forte presenza in Lombardia'},
+    {nome:'Casa.it',       url:'https://www.casa.it/vendita/residenziale/busto-arsizio/',       color:'#ff6633',icon:'🏡',desc:'Buono per zone periferiche'},
+    {nome:'Wikicasa',      url:'https://www.wikicasa.it/vendita-case/busto-arsizio/',           color:'#28a745',icon:'📊',desc:'Dati di mercato integrati'},
+    {nome:'Subito.it',     url:'https://www.subito.it/immobili/vendita/appartamenti/lombardia/annunci-busto-arsizio/',color:'#f39c12',icon:'⚡',desc:'Privati e piccole agenzie'},
+    {nome:'Trovacasa',     url:'https://www.trovacasa.net/vendita_case_busto_arsizio.html',     color:'#9b59b6',icon:'🔎',desc:'Aggregatore regionale'},
+  ];
   document.getElementById('view').innerHTML=`
-    <div style="background:linear-gradient(135deg,#f0f4ff,#fff);border:1px solid #d0d8f0;border-radius:12px;padding:12px 16px;margin-bottom:14px;font-size:13px;line-height:1.6;color:#2a3a5a">
-      🖥 <b>Finestre portali</b> — il server CasaBusto recupera le pagine bypassando i blocchi iframe.<br>
-      <span style="color:#5a6a8a">Se il sito usa Cloudflare potrebbero non caricarsi: imposta <code style="background:#e8edf8;padding:1px 5px;border-radius:4px;font-size:11.5px">SCRAPERAPI_KEY</code> su Render per il bypass automatico (account gratuito → <a href="https://www.scraperapi.com/" target="_blank" style="color:#3a5aa0">scraperapi.com</a>).</span>
+    <div style="background:#f8f9ff;border:1px solid #dce0f0;border-radius:12px;padding:13px 16px;margin-bottom:16px;font-size:13px;color:#2a3060;line-height:1.6">
+      🔗 <b>Accesso diretto ai portali</b> — Si aprono nel browser in nuova scheda.<br>
+      <span style="color:#5a6880;font-size:12px">Usa la tab <b>📡 Annunci live</b> per vedere gli annunci aggregati direttamente in CasaBusto senza uscire dall'app.</span>
     </div>
-    <div class="tool-tabs" style="margin-bottom:14px">
-      ${PORTALI_CFG.map(p=>`
-        <button id="ptab_${p.id}" class="${p.id===_portaleCur?'on':''}"
-          onclick="switchPortale('${p.id}')" style="${p.id===_portaleCur?`border-bottom:2.5px solid ${p.color}`:''}"
-        >${p.icon} ${p.nome}</button>`).join('')}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+      ${portali.map(p=>`
+        <a href="${p.url}" target="_blank" rel="noopener" style="text-decoration:none">
+          <div class="card" style="padding:16px;border-top:3px solid ${p.color};transition:transform .15s,box-shadow .15s;cursor:pointer" onmouseenter="this.style.transform='translateY(-2px)';this.style.boxShadow='0 6px 20px rgba(0,0,0,.12)'" onmouseleave="this.style.transform='';this.style.boxShadow=''">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+              <span style="font-size:20px">${p.icon}</span>
+              <span style="font-weight:700;font-size:14px;color:var(--ink)">${p.nome}</span>
+            </div>
+            <div style="font-size:11.5px;color:var(--muted);margin-bottom:10px">${p.desc}</div>
+            <div style="font-size:12px;font-weight:600;color:${p.color}">Cerca a Busto Arsizio ↗</div>
+          </div>
+        </a>`).join('')}
     </div>
-    <div id="portaleWrap" class="portal-frame-wrap" style="min-height:700px">
-      <div id="portaleLoading" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--paper);z-index:2">
-        <div style="font-size:30px">⏳</div>
-        <div style="font-weight:600;font-size:14px">Caricamento portale…</div>
-        <div style="font-size:12px;color:var(--muted)">Il proxy server sta recuperando la pagina</div>
-      </div>
-      <iframe id="portaleFrame" style="width:100%;height:700px;border:none;display:block"
-        onload="portaleLoaded()" onerror="portaleError()"></iframe>
-    </div>
-    <div id="portaleActions" style="display:flex;gap:10px;margin-top:10px;align-items:center;flex-wrap:wrap"></div>`;
-  loadPortale(_portaleCur);
+    <div style="text-align:center;margin-bottom:16px">
+      <button class="btn btn-p" onclick="annunciTab='live';_annunciLiveCache=null;caricaAnnunciLive()">
+        📡 Carica annunci live direttamente qui →
+      </button>
+      <div style="font-size:12px;color:var(--muted);margin-top:8px">Aggrega gli annunci da Immobiliare.it e mostra le schede senza uscire dall'app</div>
+    </div>`;
 }
-function switchPortale(id){
-  _portaleCur=id;
-  PORTALI_CFG.forEach(p=>{
-    const b=document.getElementById('ptab_'+p.id);
-    if(b){
-      b.classList.toggle('on',p.id===id);
-      b.style.borderBottom=p.id===id?`2.5px solid ${p.color}`:'';
-    }
-  });
-  loadPortale(id);
-}
-function loadPortale(id){
-  const p=PORTALI_CFG.find(x=>x.id===id);
-  if(!p)return;
-  const frame=document.getElementById('portaleFrame');
-  const loading=document.getElementById('portaleLoading');
-  const actions=document.getElementById('portaleActions');
-  if(!frame)return;
-  if(loading){
-    loading.style.display='flex';
-    loading.innerHTML=`
-      <div style="font-size:30px;margin-bottom:4px">${p.icon}</div>
-      <div style="font-weight:600;font-size:14px">Caricamento ${p.nome}…</div>
-      <div style="font-size:12px;color:var(--muted);margin-top:4px">Proxy in corso — potrebbe richiedere fino a 30 secondi</div>
-      <a href="${p.url}" target="_blank" style="margin-top:16px;font-size:12.5px;color:var(--terra);font-weight:600;text-decoration:none">↗ Apri direttamente nel browser</a>`;
-  }
-  frame.src='/api/frame?url='+encodeURIComponent(p.url)+'&t='+Date.now();
-  if(actions) actions.innerHTML=`
-    <a href="${p.url}" target="_blank" class="btn btn-g btn-sm" style="text-decoration:none">↗ Apri ${p.nome} nel browser</a>
-    <button class="btn btn-g btn-sm" onclick="loadPortale('${p.id}')">↺ Ricarica</button>
-    <span style="font-size:12px;color:var(--muted);flex:1">I link all'interno si aprono in nuova scheda</span>`;
-  // Timeout più lungo (ScraperAPI può impiegare 30s)
-  clearTimeout(window._portaleTimer);
-  window._portaleTimer=setTimeout(()=>{
-    if(loading&&loading.style.display!=='none'){
-      loading.innerHTML=`
-        <div style="font-size:36px;margin-bottom:10px">⏱</div>
-        <div style="font-weight:600;font-size:14px;margin-bottom:8px">Risposta lenta dal server proxy</div>
-        <div style="font-size:12.5px;color:var(--muted);max-width:380px;line-height:1.6;text-align:center;margin-bottom:16px">
-          ${p.nome} sta impiegando più del previsto. Il proxy continua in background.<br>
-          <span style="color:var(--terra);font-size:12px">Se non si carica entro qualche secondo, usa il link diretto.</span>
-        </div>
-        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-          <a href="${p.url}" target="_blank" class="btn btn-p btn-sm" style="text-decoration:none">↗ Apri ${p.nome}</a>
-          <button class="btn btn-g btn-sm" onclick="loadPortale('${p.id}')">↺ Riprova</button>
-        </div>`;
-    }
-  },22000);
-}
-function portaleLoaded(){
-  const loading=document.getElementById('portaleLoading');
-  if(loading){loading.style.display='none';}
-  clearTimeout(window._portaleTimer);
-}
-function portaleError(){portaleLoaded();}
 
 /* --- Annunci LIVE (RSS proxy server) --- */
 let _annunciLiveCache=null;
 async function caricaAnnunciLive(){
   annunciTab='live';
+  // Aggiorna topAct mantenendo i tab + aggiunge reload
   document.getElementById('topAct').innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="btn btn-g btn-sm" onclick="annunciTab='manual';vAnnunci()">← I miei annunci</button>
-      <button class="btn btn-g btn-sm" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Ricarica</button>
+    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-p btn-sm">📡 Annunci live</button>
+      <button class="btn btn-g btn-sm" onclick="annunciTab='portali';renderPortaliLink()">🔗 Portali</button>
+      <button class="btn btn-g btn-sm" onclick="annunciTab='manual';vAnnunci()">📁 I miei</button>
+      <button class="btn btn-g btn-sm" style="margin-left:6px" onclick="_annunciLiveCache=null;caricaAnnunciLive()">⟳ Ricarica</button>
     </div>`;
   if(_annunciLiveCache){ renderAnnunciLive(_annunciLiveCache); return; }
-  document.getElementById('view').innerHTML=`<div class="card" style="text-align:center;padding:50px 20px">
-    <div style="font-size:15px;font-weight:600;margin-bottom:6px">Caricamento annunci live…</div>
-    <div style="font-size:13px;color:var(--muted)">Recupero dati da Immobiliare.it</div></div>`;
+  document.getElementById('view').innerHTML=`
+    <div style="text-align:center;padding:52px 20px">
+      <div style="width:36px;height:36px;border:3px solid rgba(0,0,0,.1);border-top-color:var(--terra);border-radius:50%;animation:_m3dspin .75s linear infinite;margin:0 auto 16px"></div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px">Caricamento annunci live…</div>
+      <div style="font-size:13px;color:var(--muted)">Recupero RSS da Immobiliare.it · Busto Arsizio</div>
+    </div>`;
   try{
     const r=await fetch('/api/annunci-live',{credentials:'same-origin',headers:authHeaders()});
     if(!r.ok) throw new Error('HTTP '+r.status);
@@ -976,10 +939,11 @@ async function caricaAnnunciLive(){
     renderAnnunciLive(data);
   }catch(e){
     document.getElementById('view').innerHTML=`<div class="card">
-      <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d)">
-        <b>Errore nel caricamento:</b> ${e.message}<br>
-        <span style="font-size:12px">Verifica la connessione o usa i link diretti ai portali qui sotto.</span>
+      <div class="note" style="border-color:var(--terra);background:var(--terra-l);color:var(--terra-d);margin-bottom:16px">
+        <b>⚠️ Caricamento fallito:</b> ${e.message}<br>
+        <span style="font-size:12px">Immobiliare.it potrebbe star limitando le richieste. Riprova tra qualche minuto.</span>
       </div>
+      <div style="font-weight:600;margin-bottom:12px;font-size:14px">Vai direttamente ai portali:</div>
       ${portalLinks()}</div>`;
   }
 }

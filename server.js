@@ -350,13 +350,22 @@ function xmlGet(item,tag){
 
 app.get("/api/annunci-live", requireLogin, async (req,res)=>{
   const annunci=[];
+  // Feed RSS multipli — Immobiliare.it RSS NON è dietro Cloudflare, va con Chrome headers
   const feeds=[
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/"},
-    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-affitto/busto-arsizio-varese/",contratto:"affitto"}
+    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/",contratto:"vendita"},
+    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-affitto/busto-arsizio-varese/",contratto:"affitto"},
+    // Feed zone limitrofe per completezza
+    {nome:"Immobiliare.it",url:"https://www.immobiliare.it/feeds/rss/annunci/immobili-in-vendita/busto-arsizio-varese/?prezzoMassimo=300000",contratto:"vendita"},
+    {nome:"Wikicasa.it",url:"https://www.wikicasa.it/rss/vendita/busto-arsizio/",contratto:"vendita"}
   ];
   for(const feed of feeds){
     try{
-      const r=await fetch(feed.url,{headers:{"User-Agent":"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36","Accept":"application/rss+xml,application/xml,text/xml,*/*","Accept-Language":"it-IT,it;q=0.9"},signal:AbortSignal.timeout(12000)});
+      const r=await fetch(feed.url,{
+        headers:{...CHROME_HEADERS,
+          "Accept":"application/rss+xml,application/xml,text/xml,application/atom+xml,*/*;q=0.8",
+          "Cache-Control":"no-cache","Pragma":"no-cache"},
+        signal:AbortSignal.timeout(10000)
+      });
       if(!r.ok){console.warn(`[annunci] ${feed.nome} HTTP ${r.status}`);continue;}
       const xml=await r.text();
       if(!xml.includes("<item>")){console.warn(`[annunci] no <item>`);continue;}
